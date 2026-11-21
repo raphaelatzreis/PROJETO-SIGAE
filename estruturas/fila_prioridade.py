@@ -55,3 +55,33 @@ class FilaPrioridade:
                 posicao_atual = posicao_de_quem_esta_acima
             else:
                 break
+
+    def descer(self, posicao_atual):
+        quantidade_na_fila = len(self.fila)
+
+        while True:
+            posicao_abaixo_esquerda = self._posicao_abaixo_esquerda(posicao_atual)
+            posicao_abaixo_direita = self._posicao_abaixo_direita(posicao_atual)
+            posicao_mais_urgente = posicao_atual
+
+            if posicao_abaixo_esquerda < quantidade_na_fila:
+                if self.vem_antes(self.fila[posicao_abaixo_esquerda], self.fila[posicao_mais_urgente]):
+                    posicao_mais_urgente = posicao_abaixo_esquerda
+
+            if posicao_abaixo_direita < quantidade_na_fila:
+                if self.vem_antes(self.fila[posicao_abaixo_direita], self.fila[posicao_mais_urgente]):
+                    posicao_mais_urgente = posicao_abaixo_direita
+
+            if posicao_mais_urgente == posicao_atual:
+                break
+
+            self._trocar(posicao_atual, posicao_mais_urgente)
+            posicao_atual = posicao_mais_urgente
+            
+    def inserir(self, pessoa):
+        if self.esta_na_fila(pessoa.id):
+            raise ValueError(f"O id {pessoa.id} já está na fila.")
+        self.fila.append(pessoa)
+        posicao_no_fim_da_fila = len(self.fila) - 1
+        self.posicoes[pessoa.id] = posicao_no_fim_da_fila
+        self.subir(posicao_no_fim_da_fila)
