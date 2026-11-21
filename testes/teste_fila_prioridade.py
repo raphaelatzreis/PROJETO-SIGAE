@@ -5,6 +5,8 @@ pasta_do_projeto = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(pasta_do_projeto)
 
 from estruturas.fila_prioridade import FilaPrioridade
+
+
 class PacienteTeste:
     def __init__(self, id, nome, prioridade, horario):
         self.id = id
@@ -19,6 +21,14 @@ def paciente_vem_antes(paciente_avaliado, paciente_comparado):
     if paciente_avaliado.horario != paciente_comparado.horario:
         return paciente_avaliado.horario < paciente_comparado.horario
     return paciente_avaliado.id < paciente_comparado.id
+
+
+def mostrar_painel_de_posicoes(fila):
+    print("Painel de posições (número de atendimento: posição):")
+    for numero_de_atendimento in range(len(fila.posicoes)):
+        posicao = fila.posicoes[numero_de_atendimento]
+        if posicao is not None:
+            print(f"  {numero_de_atendimento}: {posicao}")
 
 
 print("=== Teste da fila de pacientes ===")
@@ -53,5 +63,5 @@ except ValueError:
     print(f"Teste 5 ok: número 101 (Marcos) já está na fila, cadastro repetido bloqueado "
           f"({fila.tamanho()} na fila)")
 
-print("Painel de posições (número de atendimento: posição):", fila.posicoes)
+mostrar_painel_de_posicoes(fila)
 print("=== Todos os testes passaram ===")
