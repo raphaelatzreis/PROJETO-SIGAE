@@ -124,3 +124,17 @@ class FilaPrioridade:
             self.descer(0)
 
         return pessoa_mais_urgente
+    
+    def alterar_prioridade(self, id_pessoa):
+        posicao_atual = self._buscar_posicao(id_pessoa)
+        if posicao_atual is None:
+            raise ValueError(f"O id {id_pessoa} não está na fila.")
+
+        pessoa_reclassificada = self.fila[posicao_atual]
+
+        self.subir(posicao_atual)
+
+        posicao_depois_de_subir = self._buscar_posicao(id_pessoa)
+        self.descer(posicao_depois_de_subir)
+
+        return pessoa_reclassificada
