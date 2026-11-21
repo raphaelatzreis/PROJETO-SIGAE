@@ -35,33 +35,53 @@ print("=== Teste da fila de pacientes ===")
 
 fila = FilaPrioridade(paciente_vem_antes)
 
-assert fila.esta_vazia() == True
-assert fila.ver_proximo() == None
+assert fila.esta_vazia()
+assert fila.ver_proximo() is None
 print(f"Teste 1 ok: pronto-socorro abriu, ninguém aguardando ({fila.tamanho()} na fila)")
 
 fila.inserir(PacienteTeste(101, "Marcos", 4, "08:00"))
 fila.inserir(PacienteTeste(102, "Brenno", 3, "08:05"))
 assert fila.ver_proximo().nome == "Brenno"
 print(f"Teste 2 ok: chegaram Marcos (prioridade 4) e Brenno (prioridade 3). "
-      f"Próximo: Brenno ({fila.tamanho()} na fila)")
+    f"Próximo: Brenno ({fila.tamanho()} na fila)")
 
 fila.inserir(PacienteTeste(103, "Raphaela", 3, "08:02"))
 assert fila.ver_proximo().nome == "Raphaela"
 print(f"Teste 3 ok: chegou Raphaela (prioridade 3, 08:02), antes de Brenno (08:05). "
-      f"Próximo: Raphaela ({fila.tamanho()} na fila)")
+    f"Próximo: Raphaela ({fila.tamanho()} na fila)")
 
 fila.inserir(PacienteTeste(104, "Matheus", 1, "08:15"))
 assert fila.ver_proximo().nome == "Matheus"
 assert fila.tamanho() == 4
 print(f"Teste 4 ok: chegou Matheus (prioridade 1, emergência). "
-      f"Próximo: Matheus ({fila.tamanho()} na fila)")
+    f"Próximo: Matheus ({fila.tamanho()} na fila)")
 
 try:
     fila.inserir(PacienteTeste(101, "Repetido", 1, "09:00"))
     print("Teste 5 FALHOU: deixou entrar número de atendimento repetido")
 except ValueError:
     print(f"Teste 5 ok: número 101 (Marcos) já está na fila, cadastro repetido bloqueado "
-          f"({fila.tamanho()} na fila)")
+        f"({fila.tamanho()} na fila)")
 
+marcos = fila.fila[fila.posicoes[101]]
+marcos.prioridade = 1
+
+fila.alterar_prioridade(101)
+assert fila.ver_proximo().nome == "Marcos"
+print(f"Teste 6 ok: Marcos reclassificado de 4 para 1 (emergência). Empata com Matheus, "
+    f"mas chegou antes (08:00 contra 08:15). Próximo: Marcos ({fila.tamanho()} na fila)")
+
+marcos.prioridade = 5
+
+fila.alterar_prioridade(101)
+assert fila.ver_proximo().nome == "Matheus"
+print(f"Teste 7 ok: Marcos reclassificado de 1 para 5 (não urgente). "
+    f"Próximo: Matheus ({fila.tamanho()} na fila)")
+
+try:
+    fila.alterar_prioridade(999)
+    print("Teste 8 FALHOU: deixou reclassificar um número que não está na fila")
+except ValueError:
+    print("Teste 8 ok: número 999 não está na fila, reclassificação bloqueada")
 mostrar_painel_de_posicoes(fila)
 print("=== Todos os testes passaram ===")
