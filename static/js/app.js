@@ -1,0 +1,601 @@
+(function () {
+  'use strict';
+
+  // ---------------------------------------------------------------------------
+  // Estado
+  // ---------------------------------------------------------------------------
+  var state = window.__INITIAL_STATE__;
+  var filtroNivel = 'todos';
+  var termoBusca = '';
+  var drawerId = null;
+  var ultimoSeq = state.ultimo_evento ? state.ultimo_evento.seq : 0;
+  var overlayTimer = null;
+
+  var ROTAS = {
+    atendimento: { titulo: 'Atendimento', sub: 'Visão geral da fila e chamadas' },
+    fila: { titulo: 'Fila de espera', sub: 'Todos os pacientes aguardando, por prioridade' },
+    triagem: { titulo: 'Nova triagem', sub: 'Registrar paciente e classificar o risco' },
+    historico: { titulo: 'Histórico de chamadas', sub: 'Pacientes já chamados neste turno' }
+  };
+
+  function lerPref(chave, padrao) {
+    try { var v = localStorage.getItem(chave); return v === null ? padrao : v; } catch (e) { return padrao; }
+  }
+  function salvarPref(chave, valor) {
+    try { localStorage.setItem(chave, valor); } catch (e) {}
+  }
+
+  var consultorio = lerPref('sigae-consultorio', state.consultorios[0]);
+  var somAtivo = lerPref('sigae-som', '1') === '1';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = {
+    title: $('page-title'), subtitle: $('page-subtitle'), nav: $('nav'),
+    clock: $('clock'), consultorio: $('consultorio-select'), som: $('sound-toggle'), tema: $('theme-toggle'),
+    stats: $('stats'), hero: $('hero-card'), now: $('now-calling'), upcoming: $('upcoming-list'), levels: $('level-bars'),
+    filtros: $('filter-group'), busca: $('search-input'), tbody: $('patients-tbody'), hist: $('history-tbody'),
+    form: $('triage-form'), formErro: $('form-error'),
+    drawer: $('drawer'), drawerBg: $('drawer-backdrop'), drawerContent: $('drawer-content'),
+    overlay: $('call-overlay'), callKicker: $('call-kicker'), callName: $('call-name'), callPlace: $('call-place'),
+    toasts: $('toasts')
+  };
+
+  // ---------------------------------------------------------------------------
+  // Utilidades
+  // ---------------------------------------------------------------------------
+  function esc(t) {
+    return String(t == null ? '' : t)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function iniciais(nome) {
+    var partes = String(nome).trim().split(/\s+/);
+    return ((partes[0] || '')[0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
+  }
+
+  function fmtEspera(min) {
+    if (min < 60) return min + ' min';
+    var h = Math.floor(min / 60), m = min % 60;
+    return h + 'h' + (m ? String(m).padStart(2, '0') : '');
+  }
+
+  function pctEspera(p) {
+    if (!p.alvo_min) return 100;
+    return Math.min(100, Math.round((p.espera_min / p.alvo_min) * 100));
+  }
+
+  function classeEspera(p) {
+    if (p.atrasado) return 'late';
+    if (p.alvo_min && p.espera_min / p.alvo_min >= 0.75) return 'warn';
+    return 'ok';
+  }
+
+  function badge(p, compacto) {
+    return '<span class="badge lvl-' + p.nivel + (compacto ? ' badge-sm' : '') + '"><span class="dot"></span>' +
+      (compacto ? '' : 'Nível ' + p.nivel + ' · ') + esc(p.nivel_nome) + '</span>';
+  }
+
+  function avatar(p, tamanho) {
+    return '<span class="avatar lvl-' + p.nivel + (tamanho ? ' avatar-' + tamanho : '') + '" aria-hidden="true">' + esc(iniciais(p.nome)) + '</span>';
+  }
+
+  var ICON = {
+    megafone: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>',
+    repetir: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+    olho: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    lixo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>'
+  };
+
+  function api(metodo, url, corpo) {
+    return fetch(url, {
+      method: metodo,
+      headers: corpo ? { 'Content-Type': 'application/json' } : {},
+      body: corpo ? JSON.stringify(corpo) : undefined
+    }).then(function (r) {
+      return r.json().then(function (dados) {
+        if (!r.ok) throw new Error(dados.erro || 'Erro inesperado.');
+        return dados;
+      });
+    });
+  }
+
+  function toast(msg, tipo) {
+    var t = document.createElement('div');
+    t.className = 'toast' + (tipo ? ' toast-' + tipo : '');
+    t.textContent = msg;
+    el.toasts.appendChild(t);
+    requestAnimationFrame(function () { t.classList.add('show'); });
+    setTimeout(function () {
+      t.classList.remove('show');
+      setTimeout(function () { t.remove(); }, 300);
+    }, 3200);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Renderização
+  // ---------------------------------------------------------------------------
+  function renderStats() {
+    var s = state.estatisticas;
+    var itens = [
+      { rotulo: 'Na fila', valor: state.total, extra: 'pacientes aguardando' },
+      { rotulo: 'Críticos', valor: s.criticos, extra: 'níveis 1 e 2', cls: s.criticos ? 'stat-danger' : '' },
+      { rotulo: 'Acima do alvo', valor: s.atrasados, extra: 'tempo-alvo estourado', cls: s.atrasados ? 'stat-warn' : '' },
+      { rotulo: 'Espera média', valor: fmtEspera(s.espera_media), extra: 'na fila agora' },
+      { rotulo: 'Atendidos', valor: s.atendidos, extra: s.atendidos ? 'média de ' + fmtEspera(s.espera_media_atendidos) + ' de espera' : 'nenhum ainda' }
+    ];
+    el.stats.innerHTML = itens.map(function (i) {
+      return '<div class="stat ' + (i.cls || '') + '"><span class="stat-label">' + i.rotulo + '</span>' +
+        '<span class="stat-value mono">' + esc(i.valor) + '</span><span class="stat-extra">' + esc(i.extra) + '</span></div>';
+    }).join('');
+  }
+
+  function vitais(sinais, grande) {
+    sinais = sinais || {};
+    var lista = [
+      ['PA', sinais.pa, 'mmHg'],
+      ['FC', sinais.fc, 'bpm'],
+      ['Temp', sinais.temp != null ? Number(sinais.temp).toFixed(1).replace('.', ',') : null, '°C'],
+      ['SpO₂', sinais.spo2, '%']
+    ];
+    return '<div class="vitals' + (grande ? ' vitals-lg' : '') + '">' + lista.map(function (v) {
+      var alerta = (v[0] === 'SpO₂' && sinais.spo2 && sinais.spo2 < 94) ||
+                   (v[0] === 'Temp' && sinais.temp && sinais.temp >= 38) ||
+                   (v[0] === 'FC' && sinais.fc && (sinais.fc > 110 || sinais.fc < 50));
+      return '<div class="vital' + (alerta ? ' vital-alert' : '') + '"><span>' + v[0] + '</span>' +
+        '<strong class="mono">' + (v[1] != null && v[1] !== '' ? esc(v[1]) + '<small>' + v[2] + '</small>' : '—') + '</strong></div>';
+    }).join('') + '</div>';
+  }
+
+  function barraEspera(p) {
+    return '<div class="wait-meter ' + classeEspera(p) + '">' +
+      '<div class="wm-labels"><span>Espera <strong class="mono">' + fmtEspera(p.espera_min) + '</strong></span>' +
+      '<span>Alvo: ' + esc(p.tempo_alvo) + '</span></div>' +
+      '<div class="wm-track"><div class="wm-fill" style="width:' + pctEspera(p) + '%"></div></div></div>';
+  }
+
+  function renderHero() {
+    var p = state.proximo;
+    if (!p) {
+      el.hero.className = 'card hero hero-empty';
+      el.hero.innerHTML =
+        '<div class="empty"><div class="empty-icon">✓</div><h3>Fila vazia</h3>' +
+        '<p>Nenhum paciente aguardando. Registre uma nova triagem ou restaure os dados de teste.</p>' +
+        '<div class="empty-actions"><a class="btn btn-primary" href="#/triagem">Nova triagem</a>' +
+        '<button type="button" class="btn btn-ghost" data-action="resetar">Restaurar dados de teste</button></div></div>';
+      return;
+    }
+    el.hero.className = 'card hero lvl-' + p.nivel;
+    el.hero.innerHTML =
+      '<div class="hero-strip"></div>' +
+      '<div class="hero-body">' +
+        '<div class="hero-top"><span class="kicker">Próximo a ser chamado</span>' + badge(p) + '</div>' +
+        '<div class="hero-id">' + avatar(p, 'lg') +
+          '<div><h2 class="hero-name">' + esc(p.nome) + '</h2>' +
+          '<p class="hero-sub"><strong class="mono">' + esc(p.senha) + '</strong> · <span class="mono">' + esc(p.id) + '</span> · ' + p.idade + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + ' · chegou ' + esc(p.chegada) + '</p></div>' +
+        '</div>' +
+        '<p class="hero-complaint">' + esc(p.queixa) + '</p>' +
+        vitais(p.sinais) +
+        barraEspera(p) +
+        '<div class="hero-actions">' +
+          '<button type="button" class="btn btn-ghost" data-action="ver" data-id="' + esc(p.id) + '">' + ICON.olho + 'Ver paciente</button>' +
+          '<button type="button" class="btn btn-call" data-action="chamar">' + ICON.megafone +
+            '<span>Chamar para <strong>' + esc(consultorio) + '</strong></span><kbd>N</kbd></button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderNow() {
+    var c = state.ultimo_chamado;
+    if (!c) {
+      el.now.innerHTML = '<header class="card-head"><h2>Última chamada</h2></header>' +
+        '<p class="muted pad">Nenhum paciente foi chamado ainda neste turno.</p>';
+      return;
+    }
+    var anteriores = state.historico.slice(1, 4);
+    el.now.innerHTML =
+      '<header class="card-head"><h2>Última chamada</h2><a href="#/historico" class="link-sm">Histórico →</a></header>' +
+      '<div class="now-main">' + avatar(c) +
+        '<div class="now-info"><strong>' + esc(c.nome) + '</strong>' +
+          '<span>' + esc(c.consultorio) + ' · ' + esc(c.horario) + (c.vezes > 1 ? ' · chamado ' + c.vezes + 'x' : '') + '</span></div>' +
+        '<span class="up-level"><span class="dot lvl-' + c.nivel + '"></span>' + esc(c.nivel_nome) + '</span>' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + c.seq + '">' + ICON.repetir + 'Rechamar <kbd>R</kbd></button>' +
+      '</div>' +
+      (anteriores.length ? '<ul class="now-prev">' + anteriores.map(function (a) {
+        return '<li><span class="dot lvl-' + a.nivel + '"></span><span class="np-name">' + esc(a.nome) + '</span>' +
+          '<span class="np-meta">' + esc(a.consultorio) + '</span><span class="np-time mono">' + esc(a.horario) + '</span></li>';
+      }).join('') + '</ul>' : '');
+  }
+
+  function renderUpcoming() {
+    if (!state.seguintes.length) {
+      el.upcoming.innerHTML = '<li class="muted pad">Sem outros pacientes na sequência.</li>';
+      return;
+    }
+    el.upcoming.innerHTML = state.seguintes.map(function (s) {
+      return '<li><button type="button" class="up-item" data-action="ver" data-id="' + esc(s.id) + '">' +
+        '<span class="up-pos mono">' + s.ordem + '</span>' + avatar(s) +
+        '<span class="up-info"><strong>' + esc(s.nome) + '</strong><span>' + esc(s.queixa) + '</span></span>' +
+        '<span class="up-right"><span class="up-level"><span class="dot lvl-' + s.nivel + '"></span>' + esc(s.nivel_nome) + '</span>' +
+        '<span class="up-wait mono wait-' + classeEspera(s) + '">' + fmtEspera(s.espera_min) + '</span></span>' +
+        '</button></li>';
+    }).join('');
+  }
+
+  function renderLevels() {
+    var total = state.total || 1;
+    var rotulos = { 1: 'Emergência', 2: 'Muito Urgente', 3: 'Urgente', 4: 'Pouco Urgente', 5: 'Não Urgente' };
+    el.levels.innerHTML = [1, 2, 3, 4, 5].map(function (n) {
+      var qtd = state.contagem_niveis[n] || 0;
+      return '<button type="button" class="level-row" data-action="filtrar" data-nivel="' + n + '">' +
+        '<span class="lr-name"><span class="dot lvl-' + n + '"></span>' + rotulos[n] + '</span>' +
+        '<span class="lr-track"><span class="lr-fill lvl-' + n + '" style="width:' + Math.round(qtd / total * 100) + '%"></span></span>' +
+        '<span class="lr-count mono">' + qtd + '</span></button>';
+    }).join('');
+  }
+
+  function renderTabela() {
+    var lista = state.pacientes;
+    if (filtroNivel !== 'todos') {
+      var n = Number(filtroNivel);
+      lista = lista.filter(function (p) { return p.nivel === n; });
+    }
+    if (termoBusca) {
+      var q = termoBusca.toLowerCase();
+      lista = lista.filter(function (p) {
+        return (p.nome + ' ' + p.id + ' ' + p.queixa).toLowerCase().indexOf(q) !== -1;
+      });
+    }
+
+    el.filtros.querySelectorAll('[data-count]').forEach(function (c) {
+      var k = c.getAttribute('data-count');
+      c.textContent = k === 'todos' ? state.total : (state.contagem_niveis[k] || 0);
+    });
+
+    if (!lista.length) {
+      el.tbody.innerHTML = '<tr><td colspan="6" class="table-empty">' +
+        (state.total ? 'Nenhum paciente encontrado com os filtros atuais.' : 'A fila está vazia.') + '</td></tr>';
+      return;
+    }
+
+    el.tbody.innerHTML = lista.map(function (p) {
+      return '<tr class="row-click" data-action="ver" data-id="' + esc(p.id) + '">' +
+        '<td class="c-ord mono">' + p.ordem + '</td>' +
+        '<td><div class="cell-person">' + avatar(p) + '<div><div class="cell-primary">' + esc(p.nome) + '</div>' +
+          '<div class="cell-secondary"><span class="mono">' + esc(p.id) + '</span> · ' + p.idade + ' anos · ' + esc(p.sexo) + '</div></div></div></td>' +
+        '<td>' + badge(p, true) + '</td>' +
+        '<td class="c-hide-sm cell-complaint">' + esc(p.queixa) + '</td>' +
+        '<td class="c-wait"><div class="cell-primary mono wait-' + classeEspera(p) + '">' + fmtEspera(p.espera_min) + '</div>' +
+          '<div class="cell-secondary">alvo ' + esc(p.tempo_alvo.replace('Até ', '')) + '</div></td>' +
+        '<td class="c-act"><button type="button" class="btn btn-ghost btn-sm" data-action="chamar" data-id="' + esc(p.id) + '" title="Chamar agora">' + ICON.megafone + '<span class="c-hide-sm">Chamar</span></button></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderHistorico() {
+    if (!state.historico.length) {
+      el.hist.innerHTML = '<tr><td colspan="6" class="table-empty">Nenhuma chamada registrada ainda.</td></tr>';
+      return;
+    }
+    el.hist.innerHTML = state.historico.map(function (c, i) {
+      return '<tr' + (i === 0 ? ' class="row-latest"' : '') + '>' +
+        '<td class="mono">' + esc(c.horario) + '</td>' +
+        '<td><div class="cell-person">' + avatar(c) + '<div><div class="cell-primary">' + esc(c.nome) + '</div>' +
+          '<div class="cell-secondary mono">' + esc(c.senha) + ' · ' + esc(c.id) + (c.vezes > 1 ? ' · chamado ' + c.vezes + 'x' : '') + '</div></div></div></td>' +
+        '<td>' + badge(c, true) + '</td>' +
+        '<td>' + esc(c.consultorio) + '</td>' +
+        '<td class="c-hide-sm mono">' + fmtEspera(c.espera_min) + '</td>' +
+        '<td class="c-act"><button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + c.seq + '">' + ICON.repetir + '<span class="c-hide-sm">Rechamar</span></button></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderDrawer() {
+    if (!drawerId) return;
+    var p = state.pacientes.find(function (x) { return x.id === drawerId; });
+    if (!p) {
+      fecharDrawer();
+      return;
+    }
+    el.drawerContent.className = 'drawer-inner lvl-' + p.nivel;
+    el.drawerContent.innerHTML =
+      '<div class="drawer-head">' +
+        '<span class="kicker">Posição ' + p.ordem + ' de ' + state.total + ' na fila</span>' +
+        '<button type="button" class="icon-btn" data-action="fechar-drawer" aria-label="Fechar">' + ICON.x + '</button>' +
+      '</div>' +
+      '<div class="drawer-id">' + avatar(p, 'xl') +
+        '<div><h2 id="drawer-title">' + esc(p.nome) + '</h2>' +
+        '<p class="mono muted">Senha <strong>' + esc(p.senha) + '</strong> · ' + esc(p.id) + '</p></div></div>' +
+      '<div class="drawer-badge">' + badge(p) + '</div>' +
+      '<dl class="facts">' +
+        '<div><dt>Idade</dt><dd>' + p.idade + ' anos</dd></div>' +
+        '<div><dt>Sexo</dt><dd>' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + '</dd></div>' +
+        '<div><dt>Chegada</dt><dd class="mono">' + esc(p.chegada) + '</dd></div>' +
+        '<div><dt>Tempo-alvo</dt><dd>' + esc(p.tempo_alvo) + '</dd></div>' +
+      '</dl>' +
+      '<h3 class="drawer-sec">Queixa principal</h3><p class="drawer-text">' + esc(p.queixa) + '</p>' +
+      '<h3 class="drawer-sec">Sinais vitais</h3>' + vitais(p.sinais, true) +
+      (p.observacoes ? '<h3 class="drawer-sec">Observações</h3><p class="drawer-text">' + esc(p.observacoes) + '</p>' : '') +
+      '<h3 class="drawer-sec">Tempo de espera</h3>' + barraEspera(p) +
+      '<div class="drawer-actions">' +
+        '<button type="button" class="btn btn-ghost btn-danger" data-action="remover" data-id="' + esc(p.id) + '">' + ICON.lixo + 'Remover</button>' +
+        '<button type="button" class="btn btn-call" data-action="chamar" data-id="' + esc(p.id) + '">' + ICON.megafone + 'Chamar agora</button>' +
+      '</div>';
+  }
+
+  function renderNav() {
+    $('nav-count-fila').textContent = state.total;
+    $('nav-count-historico').textContent = state.historico.length;
+  }
+
+  function renderTudo() {
+    renderStats();
+    renderHero();
+    renderNow();
+    renderUpcoming();
+    renderLevels();
+    renderTabela();
+    renderHistorico();
+    renderDrawer();
+    renderNav();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Navegação por seções (hash)
+  // ---------------------------------------------------------------------------
+  function irPara() {
+    var rota = (location.hash.replace(/^#\/?/, '') || 'atendimento');
+    if (!ROTAS[rota]) rota = 'atendimento';
+    document.querySelectorAll('.view').forEach(function (v) {
+      v.hidden = v.getAttribute('data-view') !== rota;
+    });
+    el.nav.querySelectorAll('.nav-item').forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-route') === rota);
+    });
+    el.title.textContent = ROTAS[rota].titulo;
+    el.subtitle.textContent = ROTAS[rota].sub;
+    document.title = ROTAS[rota].titulo + ' — SIGAE';
+    if (rota === 'triagem') setTimeout(function () { el.form.elements.nome.focus(); }, 50);
+  }
+  window.addEventListener('hashchange', irPara);
+
+  // ---------------------------------------------------------------------------
+  // Gaveta "Ver paciente"
+  // ---------------------------------------------------------------------------
+  function abrirDrawer(id) {
+    drawerId = id;
+    renderDrawer();
+    el.drawerBg.hidden = false;
+    requestAnimationFrame(function () {
+      el.drawer.classList.add('open');
+      el.drawerBg.classList.add('show');
+    });
+    el.drawer.setAttribute('aria-hidden', 'false');
+  }
+
+  function fecharDrawer() {
+    drawerId = null;
+    el.drawer.classList.remove('open');
+    el.drawerBg.classList.remove('show');
+    el.drawer.setAttribute('aria-hidden', 'true');
+    setTimeout(function () { if (!drawerId) el.drawerBg.hidden = true; }, 250);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Chamadas (com som + voz)
+  // ---------------------------------------------------------------------------
+  function mostrarChamada(evento) {
+    var c = evento.chamada;
+    el.overlay.className = 'call-overlay lvl-' + c.nivel;
+    el.callKicker.textContent = evento.tipo === 'rechamada' ? 'Rechamando' : 'Chamando';
+    el.callName.textContent = c.nome;
+    el.callPlace.textContent = c.consultorio;
+    el.overlay.hidden = false;
+    requestAnimationFrame(function () { el.overlay.classList.add('show'); });
+    clearTimeout(overlayTimer);
+    overlayTimer = setTimeout(fecharChamada, 9000);
+  }
+
+  function fecharChamada() {
+    clearTimeout(overlayTimer);
+    el.overlay.classList.remove('show');
+    setTimeout(function () { el.overlay.hidden = true; }, 250);
+  }
+
+  function processarEvento(evento, proprio) {
+    if (!evento || evento.seq <= ultimoSeq) return;
+    ultimoSeq = evento.seq;
+    if (proprio) {
+      mostrarChamada(evento);
+      if (somAtivo) window.SigaeAudio.anunciar(evento.chamada);
+    } else {
+      toast((evento.tipo === 'rechamada' ? 'Rechamado: ' : 'Chamado: ') + evento.chamada.nome + ' → ' + evento.chamada.consultorio);
+    }
+  }
+
+  function chamar(id) {
+    if (!id && !state.proximo) return;
+    window.SigaeAudio.desbloquear();
+    api('POST', '/api/chamar', { consultorio: consultorio, id: id || null })
+      .then(function (novo) {
+        state = novo;
+        renderTudo();
+        processarEvento(novo.ultimo_evento, true);
+      })
+      .catch(function (e) { toast(e.message, 'error'); });
+  }
+
+  function rechamar(seq) {
+    window.SigaeAudio.desbloquear();
+    var corpo = seq ? { seq: Number(seq) } : {};
+    api('POST', '/api/rechamar', corpo)
+      .then(function (novo) {
+        state = novo;
+        renderTudo();
+        processarEvento(novo.ultimo_evento, true);
+      })
+      .catch(function (e) { toast(e.message, 'error'); });
+  }
+
+  function remover(id) {
+    var p = state.pacientes.find(function (x) { return x.id === id; });
+    if (!p || !confirm('Remover ' + p.nome + ' da fila?')) return;
+    api('DELETE', '/api/pacientes/' + encodeURIComponent(id))
+      .then(function (novo) {
+        state = novo;
+        fecharDrawer();
+        renderTudo();
+        toast(p.nome + ' removido da fila.');
+      })
+      .catch(function (e) { toast(e.message, 'error'); });
+  }
+
+  function resetar() {
+    api('POST', '/api/resetar').then(function (novo) {
+      state = novo;
+      renderTudo();
+      toast('Dados de teste restaurados.', 'success');
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Eventos
+  // ---------------------------------------------------------------------------
+  document.addEventListener('click', function (e) {
+    var alvo = e.target.closest('[data-action]');
+    if (!alvo) return;
+    var acao = alvo.getAttribute('data-action');
+    var id = alvo.getAttribute('data-id');
+
+    if (acao === 'chamar') { e.stopPropagation(); chamar(id); }
+    else if (acao === 'rechamar') rechamar(alvo.getAttribute('data-seq'));
+    else if (acao === 'ver') abrirDrawer(id);
+    else if (acao === 'fechar-drawer') fecharDrawer();
+    else if (acao === 'remover') remover(id);
+    else if (acao === 'resetar') resetar();
+    else if (acao === 'filtrar') {
+      filtroNivel = alvo.getAttribute('data-nivel');
+      el.filtros.querySelectorAll('.chip').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-nivel') === filtroNivel);
+      });
+      renderTabela();
+      location.hash = '#/fila';
+    }
+  });
+
+  el.drawerBg.addEventListener('click', fecharDrawer);
+  $('call-close').addEventListener('click', fecharChamada);
+  $('call-repeat').addEventListener('click', function () { rechamar(); });
+  el.overlay.addEventListener('click', function (e) { if (e.target === el.overlay) fecharChamada(); });
+
+  el.filtros.addEventListener('click', function (e) {
+    var b = e.target.closest('.chip');
+    if (!b) return;
+    filtroNivel = b.getAttribute('data-nivel');
+    el.filtros.querySelectorAll('.chip').forEach(function (x) { x.classList.toggle('active', x === b); });
+    renderTabela();
+  });
+
+  el.busca.addEventListener('input', function () {
+    termoBusca = el.busca.value.trim();
+    renderTabela();
+  });
+
+  // Consultório
+  if (state.consultorios.indexOf(consultorio) === -1) consultorio = state.consultorios[0];
+  el.consultorio.value = consultorio;
+  el.consultorio.addEventListener('change', function () {
+    consultorio = el.consultorio.value;
+    salvarPref('sigae-consultorio', consultorio);
+    renderHero();
+  });
+
+  // Som
+  function atualizarSom() {
+    el.som.setAttribute('aria-pressed', somAtivo ? 'true' : 'false');
+    el.som.title = somAtivo ? 'Som e voz ativados neste dispositivo' : 'Som e voz desativados neste dispositivo';
+  }
+  el.som.addEventListener('click', function () {
+    somAtivo = !somAtivo;
+    salvarPref('sigae-som', somAtivo ? '1' : '0');
+    atualizarSom();
+    if (somAtivo) { window.SigaeAudio.desbloquear(); window.SigaeAudio.tocarAviso(0.2); }
+    toast(somAtivo ? 'Som e voz ativados' : 'Som e voz desativados');
+  });
+  atualizarSom();
+
+  // Tema
+  el.tema.addEventListener('click', function () {
+    var novo = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', novo);
+    salvarPref('sigae-theme', novo);
+  });
+
+  // Formulário de triagem
+  el.form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    el.formErro.textContent = '';
+    var f = el.form.elements;
+    if (!el.form.checkValidity()) {
+      var invalido = el.form.querySelector(':invalid');
+      el.formErro.textContent = 'Preencha os campos obrigatórios: nome, idade, sexo, nível e queixa.';
+      if (invalido && invalido.focus) invalido.focus();
+      return;
+    }
+    var corpo = {
+      nome: f.nome.value, idade: f.idade.value, sexo: f.sexo.value, nivel: f.nivel.value,
+      queixa: f.queixa.value, observacoes: f.observacoes.value,
+      sinais: { pa: f.pa.value, fc: f.fc.value, temp: f.temp.value, spo2: f.spo2.value }
+    };
+    var botao = el.form.querySelector('[type=submit]');
+    botao.disabled = true;
+    api('POST', '/api/pacientes', corpo)
+      .then(function (novo) {
+        state = novo;
+        renderTudo();
+        el.form.reset();
+        var p = state.pacientes.find(function (x) { return x.id === novo.criado_id; });
+        toast((p ? p.nome + ' entrou na fila na posição ' + p.ordem : 'Paciente adicionado') + '.', 'success');
+        location.hash = '#/fila';
+      })
+      .catch(function (err) { el.formErro.textContent = err.message; })
+      .then(function () { botao.disabled = false; });
+  });
+  el.form.addEventListener('reset', function () { el.formErro.textContent = ''; });
+
+  // Atalhos de teclado
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      if (!el.overlay.hidden) fecharChamada();
+      else if (drawerId) fecharDrawer();
+      return;
+    }
+    var tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); chamar(); }
+    else if ((e.key === 'r' || e.key === 'R') && state.ultimo_chamado) { e.preventDefault(); rechamar(); }
+  });
+
+  // Relógio
+  function relogio() {
+    el.clock.textContent = new Date().toLocaleTimeString('pt-BR');
+  }
+  relogio();
+  setInterval(relogio, 1000);
+
+  // Sincronização com o servidor (outros operadores, tempos de espera)
+  function sincronizar() {
+    if (document.hidden) return;
+    api('GET', '/api/estado').then(function (novo) {
+      state = novo;
+      renderTudo();
+      processarEvento(novo.ultimo_evento, false);
+    }).catch(function () {});
+  }
+  setInterval(sincronizar, 5000);
+
+  // Inicialização
+  irPara();
+  renderTudo();
+})();
