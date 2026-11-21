@@ -55,3 +55,25 @@ class FilaPrioridade:
                 posicao_atual = posicao_de_quem_esta_acima
             else:
                 break
+
+    def descer(self, posicao_atual):
+        quantidade_na_fila = len(self.fila)
+
+        while True:
+            posicao_abaixo_esquerda = self._posicao_abaixo_esquerda(posicao_atual)
+            posicao_abaixo_direita = self._posicao_abaixo_direita(posicao_atual)
+            posicao_mais_urgente = posicao_atual
+
+            if posicao_abaixo_esquerda < quantidade_na_fila:
+                if self.vem_antes(self.fila[posicao_abaixo_esquerda], self.fila[posicao_mais_urgente]):
+                    posicao_mais_urgente = posicao_abaixo_esquerda
+
+            if posicao_abaixo_direita < quantidade_na_fila:
+                if self.vem_antes(self.fila[posicao_abaixo_direita], self.fila[posicao_mais_urgente]):
+                    posicao_mais_urgente = posicao_abaixo_direita
+
+            if posicao_mais_urgente == posicao_atual:
+                break
+
+            self._trocar(posicao_atual, posicao_mais_urgente)
+            posicao_atual = posicao_mais_urgente
