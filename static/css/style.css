@@ -372,6 +372,89 @@ kbd {
 .upcoming-card .upcoming { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
 .card-count { margin-left: 6px; font-size: 12.5px; font-weight: 500; color: var(--text-3); }
 
+/* Consultório livre: ponto verde no título do card do próximo */
+.free-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); margin-right: 8px; vertical-align: 1px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 20%, transparent); }
+
+/* Consultório em atendimento: prontuário à esquerda, fila à direita */
+.dash-stack[data-mode="atendimento"] {
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 400px);
+  grid-template-rows: minmax(0, 1fr); align-items: stretch;
+}
+.dash-stack[data-mode="atendimento"] .upcoming-card { min-height: 0; }
+.dash-stack[data-mode="atendimento"] .up-info span { display: none; }
+
+.consult { padding: 0; display: flex; flex-direction: column; min-height: 0; overflow: hidden; position: relative; }
+.consult::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--d); }
+
+.cs-head { display: flex; align-items: center; gap: 14px; padding: 20px 24px 18px; border-bottom: 1px solid var(--border); flex: none; }
+.cs-head .avatar { width: 48px; height: 48px; font-size: 16px; }
+.cs-id { flex: 1; min-width: 0; }
+.cs-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cs-name { font-size: 21px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.cs-sub { font-size: 12.5px; color: var(--text-3); margin-top: 3px; }
+.cs-timer {
+  display: flex; align-items: center; gap: 8px; flex: none;
+  padding: 8px 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+  font-size: 12.5px; font-weight: 550; color: var(--ok);
+}
+.cs-timer strong { font-size: 13.5px; color: var(--text); }
+
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex-shrink: 0; position: relative; display: inline-block; }
+.live-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--ok); animation: live 1.6s ease-out infinite; }
+@keyframes live { from { transform: scale(1); opacity: 0.6; } to { transform: scale(2.6); opacity: 0; } }
+
+.cs-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 24px 20px; display: flex; flex-direction: column; gap: 16px; }
+
+.cs-triage { padding: 14px 16px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
+.cs-triage-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cs-wait { font-size: 12px; color: var(--text-3); }
+.cs-wait strong { color: var(--text-2); }
+.cs-complaint { font-size: 14.5px; color: var(--text); line-height: 1.5; }
+.cs-triage .vital { background: var(--surface); }
+.cs-obs { font-size: 13px; color: var(--text-2); }
+.cs-obs strong { color: var(--text); font-weight: 600; }
+
+.cs-form { display: flex; flex-direction: column; gap: 14px; }
+.cs-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.cs-form textarea { min-height: 76px; }
+.cs-form textarea[name="anamnese"] { min-height: 96px; }
+
+.outcomes { display: flex; flex-wrap: wrap; gap: 8px; }
+.outcome { position: relative; cursor: pointer; }
+.outcome input { position: absolute; opacity: 0; pointer-events: none; }
+.outcome span {
+  display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2);
+  font-size: 13px; font-weight: 550; color: var(--text-2);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.outcome span::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--oc, var(--text-3)); }
+.outcome:hover span { border-color: var(--border-strong); color: var(--text); }
+.outcome input:checked + span { color: var(--text); border-color: var(--oc); background: color-mix(in srgb, var(--oc) 14%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--oc) 14%, transparent); }
+.outcome input:focus-visible + span { box-shadow: var(--ring); }
+.outcome-alta { --oc: var(--ok); }
+.outcome-observacao { --oc: var(--lvl-3-dot); }
+.outcome-encaminhamento { --oc: var(--lvl-5-dot); }
+.outcome-internacao { --oc: var(--lvl-1-dot); }
+.outcome-nao_compareceu { --oc: var(--text-3); }
+#cs-desfecho.is-missing .outcome span { border-color: var(--lvl-1-border); }
+#cs-desfecho.is-missing > span:first-child { color: var(--lvl-1-color); }
+
+.cs-foot {
+  flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;
+  padding: 14px 24px; border-top: 1px solid var(--border); background: var(--surface-2);
+}
+.cs-save { margin-right: auto; font-size: 12.5px; color: var(--text-3); display: inline-flex; align-items: center; gap: 6px; }
+.cs-save.is-ok::before { content: "✓"; color: var(--ok); font-weight: 700; }
+.cs-save.is-pending { color: var(--text-2); }
+.cs-save.is-error { color: var(--late); }
+
+/* Situação no histórico */
+.status { display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 550; white-space: nowrap; }
+.status-live { color: var(--ok); }
+.status-done { color: var(--text); }
+
 .hero { padding: 0; }
 .hero-strip { display: none; }
 .hero-body { padding: 22px 24px; display: flex; flex-direction: column; gap: 16px; }
@@ -748,6 +831,10 @@ kbd {
 @media (max-width: 1020px) {
   .triage-layout { grid-template-columns: 1fr; }
   .triage-aside { position: static; }
+  .dash-stack[data-mode="atendimento"] { display: flex; }
+  .dash-stack[data-mode="atendimento"] .consult { flex: none; max-height: none; overflow: visible; }
+  .dash-stack[data-mode="atendimento"] .cs-body { overflow: visible; }
+  .view[data-view="atendimento"]:has([data-mode="atendimento"]) { height: auto; }
 }
 
 @media (max-width: 860px) {
@@ -777,6 +864,11 @@ kbd {
   .search { flex: 1 1 100%; }
   .hero-name { font-size: 19px; }
   .view[data-view="atendimento"] { height: auto; min-height: 0; }
+  .cs-head { flex-wrap: wrap; padding: 16px; }
+  .cs-body { padding: 16px; }
+  .cs-grid2 { grid-template-columns: 1fr; }
+  .cs-foot { padding: 12px 16px; }
+  .cs-foot .btn { flex: 1; }
   .upcoming-card .upcoming { overflow: visible; }
   .hero-actions .btn { flex: 1; }
   .btn-call kbd, .shortcuts { display: none; }

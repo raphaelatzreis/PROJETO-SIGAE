@@ -16,6 +16,16 @@ NIVEIS_EMERGENCIA = {
 
 CONSULTORIOS = ["Consultório 1", "Consultório 2", "Consultório 3", "Consultório 4", "Sala de Emergência"]
 
+DESFECHOS = {
+    "alta": "Alta",
+    "observacao": "Em observação",
+    "encaminhamento": "Encaminhado",
+    "internacao": "Internação",
+    "nao_compareceu": "Não compareceu",
+}
+
+CAMPOS_PRONTUARIO = ("anamnese", "exame_fisico", "hipotese", "conduta")
+
 _lock = Lock()
 
 # (id, nome, idade, sexo, nível, queixa, espera_min, sinais vitais)
@@ -76,6 +86,7 @@ def _estado_inicial():
     return {
         "fila": _criar_dados_iniciais(),
         "historico": [],  # chamadas, mais recente primeiro
+        "atendimentos": {},  # consultório -> atendimento em andamento
         "evento_seq": 0,  # incrementa a cada chamada/rechamada (o telão usa para tocar o aviso)
         "ultimo_evento": None,
         "proximo_id": 1049,
@@ -143,6 +154,8 @@ def _obter_estado():
             "espera_media_atendidos": round(sum(espera_atendidos) / len(espera_atendidos)) if espera_atendidos else 0,
         },
         "consultorios": CONSULTORIOS,
+        "atendimentos": deepcopy(list(db["atendimentos"].values())),
+        "desfechos": [{"codigo": k, "nome": v} for k, v in DESFECHOS.items()],
         "servidor_hora": datetime.now().strftime("%H:%M:%S"),
     }
 
@@ -278,6 +291,9 @@ def api_chamar():
     pid = dados.get("id")
 
     with _lock:
+        if consultorio in db["atendimentos"]:
+            atual = db["atendimentos"][consultorio]["paciente"]["nome"]
+            return _erro(f"{consultorio} está atendendo {atual}. Encerre o atendimento antes de chamar outro paciente.", 409)
         ordenados = _fila_ordenada()
         if not ordenados:
             return _erro("Não há pacientes na fila.", 409)
@@ -301,6 +317,17 @@ def api_chamar():
             "consultorio": consultorio,
             "horario": datetime.now().strftime("%H:%M"),
             "vezes": 1,
+            "status": "em_atendimento",
+        }
+        agora = datetime.now()
+        db["atendimentos"][consultorio] = {
+            "seq": chamada["seq"],
+            "consultorio": consultorio,
+            "paciente": alvo,
+            "inicio": agora.strftime("%H:%M"),
+            "inicio_iso": agora.isoformat(timespec="seconds"),
+            "prontuario": {**{c: "" for c in CAMPOS_PRONTUARIO}, "desfecho": ""},
+            "salvo_em": None,
         }
         db["historico"].insert(0, chamada)
         db["fila"].pop(alvo["id"], None)
@@ -322,9 +349,69 @@ def api_rechamar():
             chamada = next((c for c in db["historico"] if c["seq"] == seq), None)
             if chamada is None:
                 return _erro("Chamada não encontrada.", 404)
+        if chamada.get("status") == "encerrado":
+            return _erro("Este atendimento já foi encerrado.", 409)
         chamada["vezes"] += 1
         chamada["horario"] = datetime.now().strftime("%H:%M")
         _registrar_evento("rechamada", chamada)
+        return jsonify(_obter_estado())
+
+
+def _achar_atendimento(seq):
+    return next((a for a in db["atendimentos"].values() if a["seq"] == seq), None)
+
+
+def _aplicar_prontuario(atendimento, dados):
+    """Copia para o prontuário apenas os campos conhecidos (texto, com limite de tamanho)."""
+    prontuario = (dados or {}).get("prontuario") or {}
+    for campo in CAMPOS_PRONTUARIO:
+        if campo in prontuario:
+            atendimento["prontuario"][campo] = str(prontuario[campo] or "")[:5000]
+    desfecho = prontuario.get("desfecho")
+    if desfecho in DESFECHOS or desfecho == "":
+        atendimento["prontuario"]["desfecho"] = desfecho
+
+
+@app.route("/api/atendimentos/<int:seq>", methods=["PATCH"])
+def api_salvar_atendimento(seq):
+    """Salvamento automático do prontuário enquanto o médico digita."""
+    dados = request.get_json(silent=True) or {}
+    with _lock:
+        atendimento = _achar_atendimento(seq)
+        if atendimento is None:
+            return _erro("Atendimento não encontrado ou já encerrado.", 404)
+        _aplicar_prontuario(atendimento, dados)
+        atendimento["salvo_em"] = datetime.now().strftime("%H:%M:%S")
+        return jsonify({"seq": seq, "salvo_em": atendimento["salvo_em"]})
+
+
+@app.route("/api/atendimentos/<int:seq>/encerrar", methods=["POST"])
+def api_encerrar_atendimento(seq):
+    dados = request.get_json(silent=True) or {}
+    with _lock:
+        atendimento = _achar_atendimento(seq)
+        if atendimento is None:
+            return _erro("Atendimento não encontrado ou já encerrado.", 404)
+        _aplicar_prontuario(atendimento, dados)
+        desfecho = atendimento["prontuario"]["desfecho"]
+        if desfecho not in DESFECHOS:
+            return _erro("Selecione o desfecho do atendimento para encerrar.")
+
+        agora = datetime.now()
+        inicio = datetime.fromisoformat(atendimento["inicio_iso"])
+        chamada = next((c for c in db["historico"] if c["seq"] == seq), None)
+        if chamada is not None:
+            chamada.update(
+                {
+                    "status": "encerrado",
+                    "desfecho": desfecho,
+                    "desfecho_nome": DESFECHOS[desfecho],
+                    "duracao_min": max(0, int((agora - inicio).total_seconds() // 60)),
+                    "fim": agora.strftime("%H:%M"),
+                    "prontuario": deepcopy(atendimento["prontuario"]),
+                }
+            )
+        db["atendimentos"].pop(atendimento["consultorio"], None)
         return jsonify(_obter_estado())
 
 

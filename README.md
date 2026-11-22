@@ -17,14 +17,15 @@ python main.py
 
 | Seção | O que faz |
 |---|---|
-| Atendimento | Indicadores (na fila, críticos, acima do tempo-alvo, espera média, atendidos), cartão do próximo paciente com sinais vitais e barra de espera vs. tempo-alvo, última chamada com botão de rechamar, próximos 5 da fila e distribuição por nível |
-| Fila | Tabela completa por prioridade, filtro por nível, busca e botão de chamar qualquer paciente |
+| Atendimento | Com o consultório **livre**: cartão do próximo paciente (sinais vitais, espera vs. tempo-alvo) e a lista dos próximos. Com paciente **chamado**: prontuário do atendimento (dados da triagem, anamnese, exame físico, hipótese diagnóstica, conduta e desfecho) com salvamento automático, cronômetro, rechamar, encerrar e "encerrar e chamar próximo", com a fila ao lado |
+| Fila | Tabela completa por prioridade, filtro por nível, busca, reclassificação do nível de urgência (clique no selo) e botão de chamar qualquer paciente |
 | Nova triagem | Cadastro com classificação de risco (Protocolo de Manchester) e sinais vitais |
-| Histórico | Chamadas do turno, com rechamada individual |
+| Histórico | Chamadas do turno com a situação (em atendimento ou desfecho e duração da consulta); rechamada enquanto o atendimento está aberto |
 | Ver paciente | Clique em qualquer paciente para abrir a ficha lateral (posição na fila, sinais vitais, chamar ou remover) |
 
 - Seletor de consultório no topo (fica salvo no navegador).
 - Atalhos: `N` chama o próximo, `R` rechama o último, `Esc` fecha janelas.
+- Cada consultório atende um paciente por vez: é preciso encerrar o atendimento (com desfecho) antes de chamar outro.
 - Ao chamar ou rechamar, o painel mostra só o aviso visual: som e voz tocam **apenas no telão**.
 
 **Telão (`/painel`)**
@@ -46,7 +47,10 @@ A voz usa a Web Speech API do navegador. Chrome e Edge já trazem vozes em pt-BR
 | GET | `/api/estado` | Estado completo (fila ordenada, histórico, estatísticas, último evento) |
 | POST | `/api/pacientes` | Cadastra paciente (`nome`, `idade`, `sexo`, `nivel`, `queixa`, `sinais`, `observacoes`) |
 | GET | `/api/pacientes/<id>` | Dados de um paciente na fila |
+| PATCH | `/api/pacientes/<id>` | Reclassifica o nível de urgência (`nivel`) |
 | DELETE | `/api/pacientes/<id>` | Remove paciente da fila |
 | POST | `/api/chamar` | Chama o próximo, ou um paciente específico com `id`; `consultorio` define o destino |
 | POST | `/api/rechamar` | Repete o aviso da última chamada, ou de uma específica com `seq` |
+| PATCH | `/api/atendimentos/<seq>` | Salva o prontuário do atendimento em andamento (`prontuario`) |
+| POST | `/api/atendimentos/<seq>/encerrar` | Encerra o atendimento; exige `prontuario.desfecho` (`alta`, `observacao`, `encaminhamento`, `internacao`, `nao_compareceu`) |
 | POST | `/api/resetar` | Restaura os dados de teste |

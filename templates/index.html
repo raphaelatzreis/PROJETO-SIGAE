@@ -93,12 +93,13 @@
       <main class="content">
         <!-- ===== Atendimento ===== -->
         <section class="view" data-view="atendimento">
-          <div class="dash-stack">
+          <div class="dash-stack" id="dash" data-mode="livre">
             <article class="card hero" id="hero-card"></article>
+            <article class="card consult" id="consult-card" hidden></article>
 
             <article class="card upcoming-card">
               <header class="card-head">
-                <h2>Próximos <span class="card-count" id="upcoming-count"></span></h2>
+                <h2><span id="upcoming-title">Próximos</span> <span class="card-count" id="upcoming-count"></span></h2>
                 <a href="#/fila" class="link-sm">Ver fila completa →</a>
               </header>
               <ol class="upcoming" id="upcoming-list"></ol>
@@ -239,6 +240,7 @@
                   <th>Nível</th>
                   <th>Local</th>
                   <th class="c-hide-sm">Espera</th>
+                  <th>Situação</th>
                   <th class="c-act"><span class="sr-only">Ações</span></th>
                 </tr>
               </thead>

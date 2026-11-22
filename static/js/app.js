@@ -10,9 +10,11 @@
   var drawerId = null;
   var ultimoSeq = state.ultimo_evento ? state.ultimo_evento.seq : 0;
   var overlayTimer = null;
+  var consultSeq = null;      // atendimento cujo formulário está na tela
+  var salvarTimer = null;
 
   var ROTAS = {
-    atendimento: { titulo: 'Atendimento', sub: 'Visão geral da fila e chamadas' },
+    atendimento: { titulo: 'Atendimento', sub: 'Consultório e fila de espera' },
     fila: { titulo: 'Fila de espera', sub: 'Todos os pacientes aguardando, por prioridade' },
     triagem: { titulo: 'Nova triagem', sub: 'Registrar paciente e classificar o risco' },
     historico: { titulo: 'Histórico de chamadas', sub: 'Pacientes já chamados neste turno' }
@@ -31,7 +33,7 @@
   var el = {
     title: $('page-title'), subtitle: $('page-subtitle'), nav: $('nav'),
     clock: $('clock'), consultorio: $('consultorio-select'), tema: $('theme-toggle'),
-    hero: $('hero-card'), upcoming: $('upcoming-list'),
+    hero: $('hero-card'), consult: $('consult-card'), dash: $('dash'), upcoming: $('upcoming-list'),
     filtros: $('filter-group'), busca: $('search-input'), tbody: $('patients-tbody'), hist: $('history-tbody'),
     form: $('triage-form'), formErro: $('form-error'),
     drawer: $('drawer'), drawerBg: $('drawer-backdrop'), drawerContent: $('drawer-content'),
@@ -84,7 +86,9 @@
     repetir: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
     olho: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>',
     x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    lixo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>'
+    lixo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>',
+    check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>',
+    proximo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
   };
 
   var NIVEIS = [
@@ -162,7 +166,7 @@
     el.hero.innerHTML =
       '<div class="hero-strip"></div>' +
       '<div class="hero-body">' +
-        '<div class="hero-top"><span class="kicker">Próximo a ser chamado</span>' + badge(p, true) + '</div>' +
+        '<div class="hero-top"><span class="kicker"><span class="free-dot"></span>' + esc(consultorio) + ' livre · próximo a ser chamado</span>' + badge(p, true) + '</div>' +
         '<div class="hero-id">' + avatar(p) +
           '<div><h2 class="hero-name">' + esc(p.nome) + '</h2>' +
           '<p class="hero-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + p.idade + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + ' · chegou ' + esc(p.chegada) + '</p></div>' +
@@ -179,10 +183,12 @@
   }
 
   function renderUpcoming() {
-    var seguintes = state.pacientes.slice(1);
+    var emAtendimento = !!atendimentoAtual();
+    var seguintes = emAtendimento ? state.pacientes : state.pacientes.slice(1);
+    $('upcoming-title').textContent = emAtendimento ? 'Fila de espera' : 'Próximos';
     $('upcoming-count').textContent = seguintes.length ? seguintes.length + ' aguardando' : '';
     if (!seguintes.length) {
-      el.upcoming.innerHTML = '<li class="muted pad">Sem outros pacientes na sequência.</li>';
+      el.upcoming.innerHTML = '<li class="muted pad">' + (emAtendimento ? 'A fila está vazia.' : 'Sem outros pacientes na sequência.') + '</li>';
       return;
     }
     el.upcoming.innerHTML = seguintes.map(function (s) {
@@ -237,7 +243,7 @@
 
   function renderHistorico() {
     if (!state.historico.length) {
-      el.hist.innerHTML = '<tr><td colspan="6" class="table-empty">Nenhuma chamada registrada ainda.</td></tr>';
+      el.hist.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhuma chamada registrada ainda.</td></tr>';
       return;
     }
     el.hist.innerHTML = state.historico.map(function (c, i) {
@@ -248,7 +254,11 @@
         '<td>' + badge(c, true) + '</td>' +
         '<td>' + esc(c.consultorio) + '</td>' +
         '<td class="c-hide-sm mono">' + fmtEspera(c.espera_min) + '</td>' +
-        '<td class="c-act"><button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + c.seq + '">' + ICON.repetir + '<span class="c-hide-sm">Rechamar</span></button></td>' +
+        '<td>' + (c.status === 'encerrado'
+          ? '<span class="status status-done">' + esc(c.desfecho_nome) + '</span><div class="cell-secondary">' + fmtEspera(c.duracao_min) + ' de consulta · ' + esc(c.fim) + '</div>'
+          : '<span class="status status-live"><span class="live-dot"></span>Em atendimento</span>') + '</td>' +
+        '<td class="c-act">' + (c.status === 'encerrado' ? '' :
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + c.seq + '">' + ICON.repetir + '<span class="c-hide-sm">Rechamar</span></button>') + '</td>' +
       '</tr>';
     }).join('');
   }
@@ -293,6 +303,7 @@
 
   function renderTudo() {
     renderHero();
+    renderAtendimento();
     renderUpcoming();
     renderTabela();
     renderHistorico();
@@ -374,6 +385,11 @@
   }
 
   function chamar(id) {
+    var ativo = atendimentoAtual();
+    if (ativo) {
+      toast('Encerre o atendimento de ' + ativo.paciente.nome + ' antes de chamar outro paciente.', 'error');
+      return;
+    }
     if (!id && !state.proximo) return;
     api('POST', '/api/chamar', { consultorio: consultorio, id: id || null })
       .then(function (novo) {
@@ -404,6 +420,162 @@
         fecharDrawer();
         renderTudo();
         toast(p.nome + ' removido da fila.');
+      })
+      .catch(function (e) { toast(e.message, 'error'); });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Atendimento em andamento no consultório selecionado
+  // ---------------------------------------------------------------------------
+  function atendimentoAtual() {
+    return (state.atendimentos || []).find(function (a) { return a.consultorio === consultorio; }) || null;
+  }
+
+  function fmtCronometro(seg) {
+    seg = Math.max(0, Math.floor(seg));
+    var h = Math.floor(seg / 3600), m = Math.floor(seg % 3600 / 60), sg = seg % 60;
+    var dois = function (n) { return String(n).padStart(2, '0'); };
+    return (h ? h + ':' + dois(m) : dois(m)) + ':' + dois(sg);
+  }
+
+  function atualizarCronometro() {
+    var a = atendimentoAtual();
+    var alvo = $('cs-timer');
+    if (!a || !alvo) return;
+    alvo.textContent = fmtCronometro((Date.now() - Date.parse(a.inicio_iso)) / 1000);
+  }
+
+  function renderAtendimento() {
+    var a = atendimentoAtual();
+    el.dash.setAttribute('data-mode', a ? 'atendimento' : 'livre');
+    el.hero.hidden = !!a;
+    el.consult.hidden = !a;
+    if (!a) {
+      consultSeq = null;
+      el.consult.innerHTML = '';
+      return;
+    }
+
+    var p = a.paciente;
+    var vezes = (state.historico.find(function (c) { return c.seq === a.seq; }) || {}).vezes || 1;
+    if (consultSeq === a.seq) {
+      // Mesmo atendimento: não reconstrói o formulário (o médico pode estar digitando)
+      var v = $('cs-vezes');
+      if (v) v.textContent = vezes > 1 ? ' · chamado ' + vezes + 'x' : '';
+      return;
+    }
+    consultSeq = a.seq;
+    var pr = a.prontuario || {};
+    var desfechos = state.desfechos || [];
+
+    el.consult.className = 'card consult lvl-' + p.nivel;
+    el.consult.innerHTML =
+      '<header class="cs-head">' + avatar(p, 'lg') +
+        '<div class="cs-id"><div class="cs-title"><h2 class="cs-name">' + esc(p.nome) + '</h2>' + badge(p, true) + '</div>' +
+          '<p class="cs-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + p.idade + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') +
+          ' · chamado às ' + esc(a.inicio) + '<span id="cs-vezes">' + (vezes > 1 ? ' · chamado ' + vezes + 'x' : '') + '</span></p></div>' +
+        '<div class="cs-timer"><span class="live-dot"></span><span>Em atendimento</span><strong class="mono" id="cs-timer">00:00</strong></div>' +
+      '</header>' +
+      '<div class="cs-body">' +
+        '<section class="cs-triage">' +
+          '<div class="cs-triage-top"><span class="kicker">Dados da triagem</span>' +
+            '<span class="cs-wait">Aguardou <strong class="mono">' + fmtEspera(p.espera_min) + '</strong> · alvo ' + esc(p.tempo_alvo.replace('Até ', 'até ')) + '</span></div>' +
+          '<p class="cs-complaint">' + esc(p.queixa) + '</p>' +
+          vitais(p.sinais) +
+          (p.observacoes ? '<p class="cs-obs"><strong>Observações:</strong> ' + esc(p.observacoes) + '</p>' : '') +
+        '</section>' +
+        '<form class="cs-form" id="consult-form" data-seq="' + a.seq + '" autocomplete="off">' +
+          '<label class="field"><span>Anamnese <em>relato do paciente</em></span>' +
+            '<textarea name="anamnese" rows="4" placeholder="Queixa nas palavras do paciente, início e evolução dos sintomas, antecedentes, medicações em uso, alergias…">' + esc(pr.anamnese) + '</textarea></label>' +
+          '<div class="cs-grid2">' +
+            '<label class="field"><span>Exame físico</span>' +
+              '<textarea name="exame_fisico" rows="3" placeholder="Estado geral, ausculta, palpação, achados relevantes…">' + esc(pr.exame_fisico) + '</textarea></label>' +
+            '<label class="field"><span>Conduta e prescrição</span>' +
+              '<textarea name="conduta" rows="3" placeholder="Medicações, exames solicitados, orientações ao paciente…">' + esc(pr.conduta) + '</textarea></label>' +
+          '</div>' +
+          '<label class="field"><span>Hipótese diagnóstica</span>' +
+            '<input name="hipotese" type="text" placeholder="Ex.: Crise asmática moderada (CID J45)" value="' + esc(pr.hipotese) + '"></label>' +
+          '<div class="field" id="cs-desfecho"><span>Desfecho <em>obrigatório para encerrar</em></span><div class="outcomes" role="radiogroup">' +
+            desfechos.map(function (d) {
+              return '<label class="outcome outcome-' + d.codigo + '"><input type="radio" name="desfecho" value="' + d.codigo + '"' + (pr.desfecho === d.codigo ? ' checked' : '') + '>' +
+                '<span>' + esc(d.nome) + '</span></label>';
+            }).join('') +
+          '</div></div>' +
+        '</form>' +
+      '</div>' +
+      '<footer class="cs-foot">' +
+        '<span class="cs-save" id="cs-save">' + (a.salvo_em ? 'Salvo às ' + esc(a.salvo_em) : 'Salvamento automático') + '</span>' +
+        '<button type="button" class="btn btn-ghost" data-action="rechamar" data-seq="' + a.seq + '">' + ICON.repetir + 'Rechamar</button>' +
+        '<button type="button" class="btn btn-ghost" data-action="encerrar">' + ICON.check + 'Encerrar atendimento</button>' +
+        (state.total ? '<button type="button" class="btn btn-call" data-action="encerrar-proximo">Encerrar e chamar próximo' + ICON.proximo + '</button>' : '') +
+      '</footer>';
+
+    var form = $('consult-form');
+    form.addEventListener('input', agendarSalvamento);
+    form.addEventListener('change', agendarSalvamento);
+    form.addEventListener('submit', function (e) { e.preventDefault(); });
+    atualizarCronometro();
+  }
+
+  function lerProntuario() {
+    var form = $('consult-form');
+    if (!form) return null;
+    var f = form.elements;
+    return {
+      anamnese: f.anamnese.value, exame_fisico: f.exame_fisico.value,
+      conduta: f.conduta.value, hipotese: f.hipotese.value,
+      desfecho: (form.querySelector('input[name=desfecho]:checked') || {}).value || ''
+    };
+  }
+
+  function statusSalvamento(texto, tipo) {
+    var alvo = $('cs-save');
+    if (!alvo) return;
+    alvo.textContent = texto;
+    alvo.className = 'cs-save' + (tipo ? ' is-' + tipo : '');
+  }
+
+  function agendarSalvamento() {
+    $('cs-desfecho').classList.remove('is-missing');
+    statusSalvamento('Salvando…', 'pending');
+    clearTimeout(salvarTimer);
+    var seq = consultSeq;
+    salvarTimer = setTimeout(function () { salvarTimer = null; salvarProntuario(seq); }, 700);
+  }
+
+  function salvarProntuario(seq) {
+    if (seq !== consultSeq) return Promise.resolve();
+    var prontuario = lerProntuario();
+    return api('PATCH', '/api/atendimentos/' + seq, { prontuario: prontuario })
+      .then(function (r) {
+        var a = atendimentoAtual();
+        if (a && a.seq === seq) { a.prontuario = prontuario; a.salvo_em = r.salvo_em; }
+        if (seq === consultSeq) statusSalvamento('Salvo às ' + r.salvo_em, 'ok');
+      })
+      .catch(function (e) { if (seq === consultSeq) statusSalvamento(e.message, 'error'); });
+  }
+
+  function encerrarAtendimento(chamarProximo) {
+    var a = atendimentoAtual();
+    if (!a) return;
+    var prontuario = lerProntuario();
+    if (!prontuario.desfecho) {
+      var campo = $('cs-desfecho');
+      campo.classList.add('is-missing');
+      campo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('Selecione o desfecho para encerrar o atendimento.', 'error');
+      return;
+    }
+    clearTimeout(salvarTimer);
+    salvarTimer = null;
+    api('POST', '/api/atendimentos/' + a.seq + '/encerrar', { prontuario: prontuario })
+      .then(function (novo) {
+        state = novo;
+        consultSeq = null;
+        renderTudo();
+        var d = state.desfechos.find(function (x) { return x.codigo === prontuario.desfecho; });
+        toast('Atendimento de ' + a.paciente.nome + ' encerrado · ' + (d ? d.nome : '') + '.', 'success');
+        if (chamarProximo) chamar();
       })
       .catch(function (e) { toast(e.message, 'error'); });
   }
@@ -484,6 +656,8 @@
 
     if (acao === 'chamar') { e.stopPropagation(); chamar(id); }
     else if (acao === 'nivel') abrirMenuNivel(alvo, id);
+    else if (acao === 'encerrar') encerrarAtendimento(false);
+    else if (acao === 'encerrar-proximo') encerrarAtendimento(true);
     else if (acao === 'definir-nivel') definirNivel(id, Number(alvo.getAttribute('data-nivel')));
     else if (acao === 'rechamar') rechamar(alvo.getAttribute('data-seq'));
     else if (acao === 'ver') abrirDrawer(id);
@@ -522,9 +696,11 @@
   if (state.consultorios.indexOf(consultorio) === -1) consultorio = state.consultorios[0];
   el.consultorio.value = consultorio;
   el.consultorio.addEventListener('change', function () {
+    // Garante que o texto digitado no prontuário aberto seja salvo antes de trocar
+    if (salvarTimer) { clearTimeout(salvarTimer); salvarTimer = null; salvarProntuario(consultSeq); }
     consultorio = el.consultorio.value;
     salvarPref('sigae-consultorio', consultorio);
-    renderHero();
+    renderTudo();
   });
 
   // Tema
@@ -678,6 +854,7 @@
   // Relógio
   function relogio() {
     el.clock.textContent = new Date().toLocaleTimeString('pt-BR');
+    atualizarCronometro();
   }
   relogio();
   setInterval(relogio, 1000);
