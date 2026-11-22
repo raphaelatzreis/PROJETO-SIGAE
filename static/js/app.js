@@ -31,7 +31,7 @@
   var el = {
     title: $('page-title'), subtitle: $('page-subtitle'), nav: $('nav'),
     clock: $('clock'), consultorio: $('consultorio-select'), tema: $('theme-toggle'),
-    stats: $('stats'), hero: $('hero-card'), now: $('now-calling'), upcoming: $('upcoming-list'), levels: $('level-bars'),
+    hero: $('hero-card'), upcoming: $('upcoming-list'),
     filtros: $('filter-group'), busca: $('search-input'), tbody: $('patients-tbody'), hist: $('history-tbody'),
     form: $('triage-form'), formErro: $('form-error'),
     drawer: $('drawer'), drawerBg: $('drawer-backdrop'), drawerContent: $('drawer-content'),
@@ -123,21 +123,6 @@
   // ---------------------------------------------------------------------------
   // Renderização
   // ---------------------------------------------------------------------------
-  function renderStats() {
-    var s = state.estatisticas;
-    var itens = [
-      { rotulo: 'Na fila', valor: state.total, extra: 'pacientes aguardando' },
-      { rotulo: 'Críticos', valor: s.criticos, extra: 'níveis 1 e 2', cls: s.criticos ? 'stat-danger' : '' },
-      { rotulo: 'Acima do alvo', valor: s.atrasados, extra: 'tempo-alvo estourado', cls: s.atrasados ? 'stat-warn' : '' },
-      { rotulo: 'Espera média', valor: fmtEspera(s.espera_media), extra: 'na fila agora' },
-      { rotulo: 'Atendidos', valor: s.atendidos, extra: s.atendidos ? 'média de ' + fmtEspera(s.espera_media_atendidos) + ' de espera' : 'nenhum ainda' }
-    ];
-    el.stats.innerHTML = itens.map(function (i) {
-      return '<div class="stat ' + (i.cls || '') + '"><span class="stat-label">' + i.rotulo + '</span>' +
-        '<span class="stat-value mono">' + esc(i.valor) + '</span><span class="stat-extra">' + esc(i.extra) + '</span></div>';
-    }).join('');
-  }
-
   function vitais(sinais, grande) {
     sinais = sinais || {};
     var lista = [
@@ -177,10 +162,10 @@
     el.hero.innerHTML =
       '<div class="hero-strip"></div>' +
       '<div class="hero-body">' +
-        '<div class="hero-top"><span class="kicker">Próximo a ser chamado</span>' + badge(p) + '</div>' +
-        '<div class="hero-id">' + avatar(p, 'lg') +
+        '<div class="hero-top"><span class="kicker">Próximo a ser chamado</span>' + badge(p, true) + '</div>' +
+        '<div class="hero-id">' + avatar(p) +
           '<div><h2 class="hero-name">' + esc(p.nome) + '</h2>' +
-          '<p class="hero-sub"><strong class="mono">' + esc(p.senha) + '</strong> · <span class="mono">' + esc(p.id) + '</span> · ' + p.idade + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + ' · chegou ' + esc(p.chegada) + '</p></div>' +
+          '<p class="hero-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + p.idade + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + ' · chegou ' + esc(p.chegada) + '</p></div>' +
         '</div>' +
         '<p class="hero-complaint">' + esc(p.queixa) + '</p>' +
         vitais(p.sinais) +
@@ -193,52 +178,20 @@
       '</div>';
   }
 
-  function renderNow() {
-    var c = state.ultimo_chamado;
-    if (!c) {
-      el.now.innerHTML = '<header class="card-head"><h2>Última chamada</h2></header>' +
-        '<p class="muted pad">Nenhum paciente foi chamado ainda neste turno.</p>';
-      return;
-    }
-    var anteriores = state.historico.slice(1, 4);
-    el.now.innerHTML =
-      '<header class="card-head"><h2>Última chamada</h2><a href="#/historico" class="link-sm">Histórico →</a></header>' +
-      '<div class="now-main">' + avatar(c) +
-        '<div class="now-info"><strong>' + esc(c.nome) + '</strong>' +
-          '<span>' + esc(c.consultorio) + ' · ' + esc(c.horario) + (c.vezes > 1 ? ' · chamado ' + c.vezes + 'x' : '') + '</span></div>' +
-        '<span class="up-level"><span class="dot lvl-' + c.nivel + '"></span>' + esc(c.nivel_nome) + '</span>' +
-        '<button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + c.seq + '">' + ICON.repetir + 'Rechamar <kbd>R</kbd></button>' +
-      '</div>' +
-      (anteriores.length ? '<ul class="now-prev">' + anteriores.map(function (a) {
-        return '<li><span class="dot lvl-' + a.nivel + '"></span><span class="np-name">' + esc(a.nome) + '</span>' +
-          '<span class="np-meta">' + esc(a.consultorio) + '</span><span class="np-time mono">' + esc(a.horario) + '</span></li>';
-      }).join('') + '</ul>' : '');
-  }
-
   function renderUpcoming() {
-    if (!state.seguintes.length) {
+    var seguintes = state.pacientes.slice(1);
+    $('upcoming-count').textContent = seguintes.length ? seguintes.length + ' aguardando' : '';
+    if (!seguintes.length) {
       el.upcoming.innerHTML = '<li class="muted pad">Sem outros pacientes na sequência.</li>';
       return;
     }
-    el.upcoming.innerHTML = state.seguintes.map(function (s) {
+    el.upcoming.innerHTML = seguintes.map(function (s) {
       return '<li><button type="button" class="up-item" data-action="ver" data-id="' + esc(s.id) + '">' +
         '<span class="up-pos mono">' + s.ordem + '</span>' + avatar(s) +
         '<span class="up-info"><strong>' + esc(s.nome) + '</strong><span>' + esc(s.queixa) + '</span></span>' +
         '<span class="up-right"><span class="up-level"><span class="dot lvl-' + s.nivel + '"></span>' + esc(s.nivel_nome) + '</span>' +
         '<span class="up-wait mono wait-' + classeEspera(s) + '">' + fmtEspera(s.espera_min) + '</span></span>' +
         '</button></li>';
-    }).join('');
-  }
-
-  function renderLevels() {
-    var total = state.total || 1;
-    var rotulos = { 1: 'Emergência', 2: 'Muito Urgente', 3: 'Urgente', 4: 'Pouco Urgente', 5: 'Não Urgente' };
-    el.levels.innerHTML = [1, 2, 3, 4, 5].map(function (n) {
-      var qtd = state.contagem_niveis[n] || 0;
-      return '<button type="button" class="level-row" data-action="filtrar" data-nivel="' + n + '">' +
-        '<span class="lr-name"><span class="dot lvl-' + n + '"></span>' + rotulos[n] + '</span>' +
-        '<span class="lr-track"><span class="lr-fill lvl-' + n + '" style="width:' + Math.round(qtd / total * 100) + '%"></span></span>' +
-        '<span class="lr-count mono">' + qtd + '</span></button>';
     }).join('');
   }
 
@@ -339,15 +292,13 @@
   }
 
   function renderTudo() {
-    renderStats();
     renderHero();
-    renderNow();
     renderUpcoming();
-    renderLevels();
     renderTabela();
     renderHistorico();
     renderDrawer();
     renderNav();
+    renderPreview();
   }
 
   // ---------------------------------------------------------------------------
@@ -481,10 +432,10 @@
     menuNivel.setAttribute('data-id', id);
     menuNivel.innerHTML = '<div class="level-menu-title">Reclassificar urgência</div>' + NIVEIS.map(function (n) {
       var atual = n.codigo === p.nivel;
-      return '<button type="button" role="menuitemradio" aria-checked="' + atual + '" class="level-option lvl-' + n.codigo + (atual ? ' current' : '') + '"' +
+      return '<button type="button" role="menuitemradio" aria-checked="' + atual + '" class="lm-option lvl-' + n.codigo + (atual ? ' current' : '') + '"' +
         ' data-action="definir-nivel" data-id="' + esc(id) + '" data-nivel="' + n.codigo + '">' +
-        '<span class="dot"></span><span class="level-name">' + esc(n.nome) + '</span>' +
-        '<span class="level-target">' + esc(n.alvo) + '</span></button>';
+        '<span class="dot"></span><span class="lm-name">' + esc(n.nome) + '</span>' +
+        '<span class="lm-target">' + esc(n.alvo) + '</span></button>';
     }).join('');
     document.body.appendChild(menuNivel);
 
@@ -495,7 +446,7 @@
     var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
     menuNivel.style.top = top + 'px';
     menuNivel.style.left = left + 'px';
-    var foco = menuNivel.querySelector('.current') || menuNivel.querySelector('.level-option');
+    var foco = menuNivel.querySelector('.current') || menuNivel.querySelector('.lm-option');
     if (foco) foco.focus();
   }
 
@@ -583,7 +534,96 @@
     salvarPref('sigae-theme', novo);
   });
 
-  // Formulário de triagem
+  // Formulário de triagem — prévia ao vivo
+  var ICON_ALERTA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>';
+
+  function lerTriagem() {
+    var f = el.form.elements;
+    var num = function (v) { return v === '' || isNaN(Number(v)) ? null : Number(v); };
+    return {
+      nome: f.nome.value.trim(),
+      idade: num(f.idade.value),
+      sexo: f.sexo.value,
+      nivel: num(f.nivel.value),
+      queixa: f.queixa.value.trim(),
+      sinais: { pa: f.pa.value.trim(), fc: num(f.fc.value), temp: num(f.temp.value), spo2: num(f.spo2.value) }
+    };
+  }
+
+  function alertasVitais(s) {
+    var lista = {};
+    var pa = /^(\d{2,3})\s*[\/x]\s*(\d{2,3})$/i.exec(s.pa || '');
+    if (pa && (Number(pa[1]) >= 180 || Number(pa[2]) >= 110)) lista.pa = 'Pressão arterial muito elevada';
+    if (pa && Number(pa[1]) < 90) lista.pa = 'Pressão arterial baixa';
+    if (s.fc != null && (s.fc > 110 || s.fc < 50)) lista.fc = s.fc > 110 ? 'Taquicardia' : 'Bradicardia';
+    if (s.temp != null && s.temp >= 38) lista.temp = 'Febre';
+    if (s.spo2 != null && s.spo2 < 94) lista.spo2 = 'Saturação abaixo de 94%';
+    return lista;
+  }
+
+  function renderPreview() {
+    var box = $('triage-preview');
+    if (!box) return;
+    var t = lerTriagem();
+    var n = t.nivel ? NIVEIS[t.nivel - 1] : null;
+    var alertas = alertasVitais(t.sinais);
+
+    el.form.querySelectorAll('[data-vital]').forEach(function (campo) {
+      campo.classList.toggle('is-alert', !!alertas[campo.getAttribute('data-vital')]);
+    });
+
+    box.className = 'card preview ' + (n ? 'lvl-' + n.codigo : 'pv-none');
+
+    var meta = [];
+    if (t.idade != null) meta.push(t.idade + (t.idade === 1 ? ' ano' : ' anos'));
+    if (t.sexo) meta.push(t.sexo === 'F' ? 'Feminino' : 'Masculino');
+
+    var nivelHtml;
+    if (n) {
+      var frente = state.pacientes.filter(function (p) { return p.nivel <= n.codigo; }).length;
+      nivelHtml =
+        '<div class="pv-level"><span class="lc-num">' + n.codigo + '</span><div><strong>' + esc(n.nome) + '</strong>' +
+          '<small>Tempo-alvo: ' + esc(n.alvo) + '</small></div></div>' +
+        '<div class="pv-pos"><span class="pv-pos-num">' + (frente + 1) + 'º</span><span>posição prevista na fila<br>' +
+          (frente === 0 ? 'Será o próximo a ser chamado' : frente + (frente === 1 ? ' paciente' : ' pacientes') + ' à frente') +
+          ' · ' + (state.total + 1) + ' no total</span></div>';
+    } else {
+      nivelHtml = '<p class="pv-empty">Escolha o nível de risco para ver a posição prevista na fila.</p>';
+    }
+
+    var msgs = Object.keys(alertas).map(function (k) { return alertas[k]; });
+    var alertaHtml = '';
+    if (msgs.length) {
+      alertaHtml = '<div class="pv-alert">' + ICON_ALERTA + '<span><strong>' + esc(msgs.join(' · ')) + '</strong>' +
+        (n && n.codigo >= 3 ? '<br>Considere uma classificação mais urgente.' : '') + '</span></div>';
+    }
+
+    var checks = [
+      ['Nome', t.nome.length >= 3], ['Idade', t.idade != null], ['Sexo', !!t.sexo],
+      ['Nível de risco', !!n], ['Queixa', !!t.queixa]
+    ];
+    var feitos = checks.filter(function (c) { return c[1]; }).length;
+
+    box.innerHTML =
+      '<div class="pv-band"><span class="kicker">Prévia da triagem</span>' +
+        '<div class="pv-person"><span class="avatar" aria-hidden="true">' + (t.nome ? esc(iniciais(t.nome)) : '?') + '</span>' +
+          '<div><div class="pv-name' + (t.nome ? '' : ' placeholder') + '">' + esc(t.nome || 'Novo paciente') + '</div>' +
+          '<div class="pv-meta">' + (meta.length ? esc(meta.join(' · ')) : 'Idade e sexo não informados') + '</div></div></div>' +
+      '</div>' +
+      '<div class="pv-sec"><span class="kicker">Classificação</span>' + nivelHtml + '</div>' +
+      (t.queixa ? '<div class="pv-sec"><span class="kicker">Queixa</span><p class="pv-complaint">' + esc(t.queixa) + '</p></div>' : '') +
+      '<div class="pv-sec"><span class="kicker">Sinais vitais</span>' +
+        vitais({ pa: t.sinais.pa || null, fc: t.sinais.fc, temp: t.sinais.temp, spo2: t.sinais.spo2 }) + alertaHtml + '</div>' +
+      '<div class="pv-sec"><div class="pv-progress"><span>Campos obrigatórios</span><strong>' + feitos + '/' + checks.length + '</strong></div>' +
+        '<div class="pv-bar"><i style="width:' + Math.round(feitos / checks.length * 100) + '%"></i></div>' +
+        '<ul class="pv-checks">' + checks.map(function (c) {
+          return '<li' + (c[1] ? ' class="done"' : '') + '>' + c[0] + '</li>';
+        }).join('') + '</ul></div>';
+  }
+
+  el.form.addEventListener('input', renderPreview);
+  el.form.addEventListener('change', renderPreview);
+
   el.form.addEventListener('submit', function (e) {
     e.preventDefault();
     el.formErro.textContent = '';
@@ -613,7 +653,10 @@
       .catch(function (err) { el.formErro.textContent = err.message; })
       .then(function () { botao.disabled = false; });
   });
-  el.form.addEventListener('reset', function () { el.formErro.textContent = ''; });
+  el.form.addEventListener('reset', function () {
+    el.formErro.textContent = '';
+    setTimeout(renderPreview, 0);
+  });
 
   // Atalhos de teclado
   document.addEventListener('keydown', function (e) {
