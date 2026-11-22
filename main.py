@@ -243,6 +243,25 @@ def api_paciente(pid):
     return _erro("Paciente não encontrado na fila.", 404)
 
 
+@app.route("/api/pacientes/<pid>", methods=["PATCH"])
+def api_atualizar_paciente(pid):
+    """Reclassifica o nível de urgência de um paciente que está na fila."""
+    dados = request.get_json(silent=True) or {}
+    try:
+        nivel = int(dados.get("nivel"))
+    except (TypeError, ValueError):
+        return _erro("Informe o novo nível de urgência.")
+    if nivel not in NIVEIS_EMERGENCIA:
+        return _erro("Nível de emergência inválido.")
+
+    with _lock:
+        paciente = db["fila"].get(pid)
+        if paciente is None:
+            return _erro("Paciente não encontrado na fila.", 404)
+        paciente["nivel"] = nivel
+        return jsonify(_obter_estado())
+
+
 @app.route("/api/pacientes/<pid>", methods=["DELETE"])
 def api_remover_paciente(pid):
     with _lock:

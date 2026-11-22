@@ -241,9 +241,6 @@ kbd {
 }
 .icon-btn:hover { color: var(--text); border-color: var(--border-strong); }
 .icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
-#sound-toggle .i-off, #sound-toggle[aria-pressed="false"] .i-on { display: none; }
-#sound-toggle[aria-pressed="false"] .i-off { display: block; color: var(--text-3); }
-#sound-toggle[aria-pressed="true"] { color: var(--brand); }
 .i-moon { display: none; }
 [data-theme="dark"] .i-sun { display: none; }
 [data-theme="dark"] .i-moon { display: block; }
@@ -312,6 +309,29 @@ kbd {
 }
 .badge-sm { padding: 2px 8px; font-size: 11.5px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--d); display: inline-block; flex-shrink: 0; }
+
+/* Badge editável (fila) + menu de reclassificação */
+.badge-edit { cursor: pointer; font-family: inherit; line-height: inherit; transition: filter .15s, box-shadow .15s; }
+.badge-edit:hover { filter: brightness(1.12); box-shadow: 0 0 0 3px var(--b); }
+.badge-edit:focus-visible { outline: 2px solid var(--d); outline-offset: 2px; }
+.badge-edit .chev { width: 12px; height: 12px; margin-left: -2px; margin-right: -3px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; opacity: .7; }
+
+.level-menu {
+  position: fixed; z-index: 80; min-width: 230px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg); animation: level-menu-in .12s ease-out;
+}
+@keyframes level-menu-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.level-menu-title { padding: 6px 10px 8px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-3); }
+.level-option {
+  display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--c);
+  font: inherit; font-size: 13px; font-weight: 550; text-align: left; cursor: pointer;
+}
+.level-option:hover, .level-option:focus-visible { background: var(--b); outline: none; }
+.level-option.current { background: var(--b); box-shadow: inset 0 0 0 1px var(--br); }
+.level-option .level-name { flex: 1; }
+.level-option .level-target { font-size: 11.5px; font-weight: 500; color: var(--text-3); }
 
 .avatar {
   width: 34px; height: 34px;

@@ -26,12 +26,11 @@
   }
 
   var consultorio = lerPref('sigae-consultorio', state.consultorios[0]);
-  var somAtivo = lerPref('sigae-som', '1') === '1';
 
   var $ = function (id) { return document.getElementById(id); };
   var el = {
     title: $('page-title'), subtitle: $('page-subtitle'), nav: $('nav'),
-    clock: $('clock'), consultorio: $('consultorio-select'), som: $('sound-toggle'), tema: $('theme-toggle'),
+    clock: $('clock'), consultorio: $('consultorio-select'), tema: $('theme-toggle'),
     stats: $('stats'), hero: $('hero-card'), now: $('now-calling'), upcoming: $('upcoming-list'), levels: $('level-bars'),
     filtros: $('filter-group'), busca: $('search-input'), tbody: $('patients-tbody'), hist: $('history-tbody'),
     form: $('triage-form'), formErro: $('form-error'),
@@ -87,6 +86,14 @@
     x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
     lixo: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>'
   };
+
+  var NIVEIS = [
+    { codigo: 1, nome: 'Emergência', alvo: 'Imediato' },
+    { codigo: 2, nome: 'Muito Urgente', alvo: 'Até 10 min' },
+    { codigo: 3, nome: 'Urgente', alvo: 'Até 60 min' },
+    { codigo: 4, nome: 'Pouco Urgente', alvo: 'Até 120 min' },
+    { codigo: 5, nome: 'Não Urgente', alvo: 'Até 240 min' }
+  ];
 
   function api(metodo, url, corpo) {
     return fetch(url, {
@@ -264,7 +271,9 @@
         '<td class="c-ord mono">' + p.ordem + '</td>' +
         '<td><div class="cell-person">' + avatar(p) + '<div><div class="cell-primary">' + esc(p.nome) + '</div>' +
           '<div class="cell-secondary"><span class="mono">' + esc(p.id) + '</span> · ' + p.idade + ' anos · ' + esc(p.sexo) + '</div></div></div></td>' +
-        '<td>' + badge(p, true) + '</td>' +
+        '<td><button type="button" class="badge badge-sm badge-edit lvl-' + p.nivel + '" data-action="nivel" data-id="' + esc(p.id) + '"' +
+          ' title="Alterar nível de urgência" aria-haspopup="menu"><span class="dot"></span>' + esc(p.nivel_nome) +
+          '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></td>' +
         '<td class="c-hide-sm cell-complaint">' + esc(p.queixa) + '</td>' +
         '<td class="c-wait"><div class="cell-primary mono wait-' + classeEspera(p) + '">' + fmtEspera(p.espera_min) + '</div>' +
           '<div class="cell-secondary">alvo ' + esc(p.tempo_alvo.replace('Até ', '')) + '</div></td>' +
@@ -383,7 +392,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Chamadas (com som + voz)
+  // Chamadas (som e voz só no telão; aqui apenas o aviso visual)
   // ---------------------------------------------------------------------------
   function mostrarChamada(evento) {
     var c = evento.chamada;
@@ -408,7 +417,6 @@
     ultimoSeq = evento.seq;
     if (proprio) {
       mostrarChamada(evento);
-      if (somAtivo) window.SigaeAudio.anunciar(evento.chamada);
     } else {
       toast((evento.tipo === 'rechamada' ? 'Rechamado: ' : 'Chamado: ') + evento.chamada.nome + ' → ' + evento.chamada.consultorio);
     }
@@ -416,7 +424,6 @@
 
   function chamar(id) {
     if (!id && !state.proximo) return;
-    window.SigaeAudio.desbloquear();
     api('POST', '/api/chamar', { consultorio: consultorio, id: id || null })
       .then(function (novo) {
         state = novo;
@@ -427,7 +434,6 @@
   }
 
   function rechamar(seq) {
-    window.SigaeAudio.desbloquear();
     var corpo = seq ? { seq: Number(seq) } : {};
     api('POST', '/api/rechamar', corpo)
       .then(function (novo) {
@@ -451,6 +457,62 @@
       .catch(function (e) { toast(e.message, 'error'); });
   }
 
+  // ---------------------------------------------------------------------------
+  // Alterar nível de urgência (menu flutuante na fila)
+  // ---------------------------------------------------------------------------
+  var menuNivel = null;
+
+  function fecharMenuNivel() {
+    if (!menuNivel) return;
+    menuNivel.remove();
+    menuNivel = null;
+  }
+
+  function abrirMenuNivel(botao, id) {
+    var mesmo = menuNivel && menuNivel.getAttribute('data-id') === id;
+    fecharMenuNivel();
+    if (mesmo) return;
+    var p = state.pacientes.find(function (x) { return x.id === id; });
+    if (!p) return;
+
+    menuNivel = document.createElement('div');
+    menuNivel.className = 'level-menu';
+    menuNivel.setAttribute('role', 'menu');
+    menuNivel.setAttribute('data-id', id);
+    menuNivel.innerHTML = '<div class="level-menu-title">Reclassificar urgência</div>' + NIVEIS.map(function (n) {
+      var atual = n.codigo === p.nivel;
+      return '<button type="button" role="menuitemradio" aria-checked="' + atual + '" class="level-option lvl-' + n.codigo + (atual ? ' current' : '') + '"' +
+        ' data-action="definir-nivel" data-id="' + esc(id) + '" data-nivel="' + n.codigo + '">' +
+        '<span class="dot"></span><span class="level-name">' + esc(n.nome) + '</span>' +
+        '<span class="level-target">' + esc(n.alvo) + '</span></button>';
+    }).join('');
+    document.body.appendChild(menuNivel);
+
+    var r = botao.getBoundingClientRect();
+    var w = menuNivel.offsetWidth, h = menuNivel.offsetHeight;
+    var top = r.bottom + 6;
+    if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+    var left = Math.min(Math.max(8, r.left), window.innerWidth - w - 8);
+    menuNivel.style.top = top + 'px';
+    menuNivel.style.left = left + 'px';
+    var foco = menuNivel.querySelector('.current') || menuNivel.querySelector('.level-option');
+    if (foco) foco.focus();
+  }
+
+  function definirNivel(id, nivel) {
+    fecharMenuNivel();
+    var p = state.pacientes.find(function (x) { return x.id === id; });
+    if (!p || p.nivel === nivel) return;
+    api('PATCH', '/api/pacientes/' + encodeURIComponent(id), { nivel: nivel })
+      .then(function (novo) {
+        state = novo;
+        renderTudo();
+        var n = NIVEIS[nivel - 1];
+        toast(p.nome + ' → ' + n.nome, 'success');
+      })
+      .catch(function (e) { toast(e.message, 'error'); });
+  }
+
   function resetar() {
     api('POST', '/api/resetar').then(function (novo) {
       state = novo;
@@ -464,11 +526,14 @@
   // ---------------------------------------------------------------------------
   document.addEventListener('click', function (e) {
     var alvo = e.target.closest('[data-action]');
+    if (menuNivel && !e.target.closest('.level-menu') && !(alvo && alvo.getAttribute('data-action') === 'nivel')) fecharMenuNivel();
     if (!alvo) return;
     var acao = alvo.getAttribute('data-action');
     var id = alvo.getAttribute('data-id');
 
     if (acao === 'chamar') { e.stopPropagation(); chamar(id); }
+    else if (acao === 'nivel') abrirMenuNivel(alvo, id);
+    else if (acao === 'definir-nivel') definirNivel(id, Number(alvo.getAttribute('data-nivel')));
     else if (acao === 'rechamar') rechamar(alvo.getAttribute('data-seq'));
     else if (acao === 'ver') abrirDrawer(id);
     else if (acao === 'fechar-drawer') fecharDrawer();
@@ -510,20 +575,6 @@
     salvarPref('sigae-consultorio', consultorio);
     renderHero();
   });
-
-  // Som
-  function atualizarSom() {
-    el.som.setAttribute('aria-pressed', somAtivo ? 'true' : 'false');
-    el.som.title = somAtivo ? 'Som e voz ativados neste dispositivo' : 'Som e voz desativados neste dispositivo';
-  }
-  el.som.addEventListener('click', function () {
-    somAtivo = !somAtivo;
-    salvarPref('sigae-som', somAtivo ? '1' : '0');
-    atualizarSom();
-    if (somAtivo) { window.SigaeAudio.desbloquear(); window.SigaeAudio.tocarAviso(0.2); }
-    toast(somAtivo ? 'Som e voz ativados' : 'Som e voz desativados');
-  });
-  atualizarSom();
 
   // Tema
   el.tema.addEventListener('click', function () {
@@ -567,7 +618,8 @@
   // Atalhos de teclado
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
-      if (!el.overlay.hidden) fecharChamada();
+      if (menuNivel) fecharMenuNivel();
+      else if (!el.overlay.hidden) fecharChamada();
       else if (drawerId) fecharDrawer();
       return;
     }
@@ -576,6 +628,9 @@
     if (e.key === 'n' || e.key === 'N') { e.preventDefault(); chamar(); }
     else if ((e.key === 'r' || e.key === 'R') && state.ultimo_chamado) { e.preventDefault(); rechamar(); }
   });
+
+  window.addEventListener('resize', fecharMenuNivel);
+  document.addEventListener('scroll', fecharMenuNivel, true);
 
   // Relógio
   function relogio() {

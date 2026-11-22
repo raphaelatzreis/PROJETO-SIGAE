@@ -82,10 +82,6 @@
               {% for c in estado.consultorios %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
             </select>
           </label>
-          <button type="button" class="icon-btn" id="sound-toggle" aria-pressed="true" title="Anunciar chamadas neste dispositivo">
-            <svg class="i-on" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
-            <svg class="i-off" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m23 9-6 6M17 9l6 6"/></svg>
-          </button>
           <button type="button" class="icon-btn" id="theme-toggle" title="Alternar tema">
             <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
             <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -285,7 +281,6 @@
   <div class="toasts" id="toasts" aria-live="polite"></div>
 
   <script>window.__INITIAL_STATE__ = {{ estado | tojson }};</script>
-  <script src="{{ url_for('static', filename='js/audio.js') }}"></script>
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>

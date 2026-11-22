@@ -25,7 +25,7 @@ python main.py
 
 - Seletor de consultório no topo (fica salvo no navegador).
 - Atalhos: `N` chama o próximo, `R` rechama o último, `Esc` fecha janelas.
-- Botão de som no topo liga/desliga o aviso sonoro e a voz **neste dispositivo**.
+- Ao chamar ou rechamar, o painel mostra só o aviso visual: som e voz tocam **apenas no telão**.
 
 **Telão (`/painel`)**
 
