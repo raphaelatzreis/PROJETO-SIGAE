@@ -149,3 +149,44 @@ class ArvoreRubroNegra:
         })
         self._em_ordem(no.direita, lista)
 
+    def _transplantar(self, u, v):
+        if u.pai == self.NULO:
+            self.raiz = v
+        elif u == u.pai.esquerda:
+            u.pai.esquerda = v
+        else:
+            u.pai.direita = v
+        v.pai = u.pai
+
+    def remover(self, horario, id_paciente):
+        z = self.buscar(horario, id_paciente)
+        if z is None:
+            return False
+
+        y = z
+        cor_original = y.cor
+        if z.esquerda == self.NULO:
+            x = z.direita
+            self._transplantar(z, z.direita)
+        elif z.direita == self.NULO:
+            x = z.esquerda
+            self._transplantar(z, z.esquerda)
+        else:
+            y = self.menor_elemento(z.direita)
+            cor_original = y.cor
+            x = y.direita
+            if y.pai == z:
+                x.pai = y
+            else:
+                self._transplantar(y, y.direita)
+                y.direita = z.direita
+                y.direita.pai = y
+            self._transplantar(z, y)
+            y.esquerda = z.esquerda
+            y.esquerda.pai = y
+            y.cor = z.cor
+
+        if cor_original == PRETO:
+            self.ajustar_remocao(x)
+        return True
+
