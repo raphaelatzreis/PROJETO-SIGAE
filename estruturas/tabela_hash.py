@@ -11,7 +11,12 @@ class TabelaHash:
         self.total_pacientes = 0
         self.total_colisoes = 0
 
+    def _validar_id(self, id_paciente: int) -> None:
+        if isinstance(id_paciente, bool) or not isinstance(id_paciente, int) or id_paciente <= 0:
+            raise ValueError("O ID do paciente deve ser um número inteiro positivo.")
+
     def _calcular_indice(self, id_paciente: int) -> int:
+        self._validar_id(id_paciente)
         return id_paciente % self.capacidade
 
     def esta_vazia(self) -> bool:
@@ -36,6 +41,10 @@ class TabelaHash:
             self.inserir(id_paciente, paciente)
 
     def inserir(self, id_paciente: int, paciente):
+        self._validar_id(id_paciente)
+        if paciente is None:
+            raise ValueError("Os dados do paciente não podem ser nulos.")
+
         indice = self._calcular_indice(id_paciente)
         bucket = self.tabela[indice]
 
@@ -57,6 +66,7 @@ class TabelaHash:
         return paciente
 
     def buscar(self, id_paciente: int):
+        self._validar_id(id_paciente)
         if self.esta_vazia():
             return None
 
@@ -70,6 +80,7 @@ class TabelaHash:
         return None
 
     def remover(self, id_paciente: int) -> bool:
+        self._validar_id(id_paciente)
         if self.esta_vazia():
             return False
 
@@ -85,7 +96,23 @@ class TabelaHash:
         return False
 
     def validar(self) -> bool:
-        pass
+        if self.capacidade <= 0 or len(self.tabela) != self.capacidade:
+            return False
+        if self.total_pacientes < 0 or self.total_colisoes < 0:
+            return False
 
-    def validar(self) -> bool:
-        pass
+        contagem_real = 0
+        for indice, bucket in enumerate(self.tabela):
+            if not isinstance(bucket, list):
+                return False
+            for par in bucket:
+                if not isinstance(par, list) or len(par) != 2:
+                    return False
+                chave, _ = par
+                if isinstance(chave, bool) or not isinstance(chave, int) or chave <= 0:
+                    return False
+                if (chave % self.capacidade) != indice:
+                    return False
+                contagem_real += 1
+
+        return contagem_real == self.total_pacientes
