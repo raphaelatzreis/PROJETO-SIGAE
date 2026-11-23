@@ -133,3 +133,19 @@ class ArvoreRubroNegra:
             atual = atual.esquerda
         return atual
 
+    def listar_em_ordem(self):
+        lista = []
+        self._em_ordem(self.raiz, lista)
+        return lista
+
+    def _em_ordem(self, no, lista):
+        if no == self.NULO:
+            return
+        self._em_ordem(no.esquerda, lista)
+        lista.append({
+            "horario": no.horario,
+            "id": no.id,
+            "dados": no.dados,
+        })
+        self._em_ordem(no.direita, lista)
+
