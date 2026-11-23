@@ -12,6 +12,13 @@
   var elHist = $('tv-history');
   var elUnlock = $('tv-unlock');
 
+  // Único ponto que insere HTML montado em string. Todo dado dinâmico DEVE passar por esc()/num().
+  function setHTML(alvo, html) {
+    // <template> aceita qualquer trecho (inclusive <tr>/<li>) sem o parser descartar nós
+    var doc = new DOMParser().parseFromString('<template>' + html + '</template>', 'text/html');
+    alvo.replaceChildren(doc.querySelector('template').content);
+  }
+
   function esc(t) {
     return String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -32,18 +39,17 @@
 
     if (!c) {
       elAtual.className = 'tv-current tv-idle';
-      elAtual.innerHTML = '<div class="tv-senha">— —</div>' +
-        '<div class="tv-info"><span class="tv-nome">Aguardando chamadas</span></div>';
+      setHTML(elAtual, '<div class="tv-senha">— —</div>' +
+        '<div class="tv-info"><span class="tv-nome">Aguardando chamadas</span></div>');
       return;
     }
 
     elAtual.className = 'tv-current';
-    elAtual.innerHTML =
-      '<div class="tv-senha">' + esc(c.senha) + '</div>' +
+    setHTML(elAtual, '<div class="tv-senha">' + esc(c.senha) + '</div>' +
       '<div class="tv-info">' +
         '<span class="tv-nome">' + esc(c.nome) + '</span>' +
         '<span class="tv-local">' + esc(c.consultorio) + '</span>' +
-      '</div>';
+      '</div>');
 
     if (destacar) {
       void elAtual.offsetWidth; // reinicia a animação mesmo numa rechamada
@@ -60,15 +66,15 @@
     chaveHistorico = chave;
 
     if (!lista.length) {
-      elHist.innerHTML = '<li class="tv-empty">Nenhuma chamada anterior</li>';
+      setHTML(elHist, '<li class="tv-empty">Nenhuma chamada anterior</li>');
       return;
     }
-    elHist.innerHTML = lista.map(function (c) {
+    setHTML(elHist, lista.map(function (c) {
       return '<li>' +
         '<span class="th-name">' + esc(c.nome) + '</span>' +
         '<span class="th-place">' + esc(c.consultorio) + '</span>' +
         '<span class="th-time">' + esc(c.horario) + '</span></li>';
-    }).join('');
+    }).join(''));
   }
 
   function render(destacar) {

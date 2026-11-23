@@ -49,6 +49,13 @@
     return isFinite(n) ? n : 0;
   }
 
+  // Único ponto que insere HTML montado em string. Todo dado dinâmico DEVE passar por esc()/num().
+  function setHTML(alvo, html) {
+    // <template> aceita qualquer trecho (inclusive <tr>/<li>) sem o parser descartar nós
+    var doc = new DOMParser().parseFromString('<template>' + html + '</template>', 'text/html');
+    alvo.replaceChildren(doc.querySelector('template').content);
+  }
+
   function esc(t) {
     return String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -163,16 +170,14 @@
     var p = state.proximo;
     if (!p) {
       el.hero.className = 'card hero hero-empty';
-      el.hero.innerHTML =
-        '<div class="empty"><div class="empty-icon">✓</div><h3>Fila vazia</h3>' +
+      setHTML(el.hero, '<div class="empty"><div class="empty-icon">✓</div><h3>Fila vazia</h3>' +
         '<p>Nenhum paciente aguardando. Registre uma nova triagem ou restaure os dados de teste.</p>' +
         '<div class="empty-actions"><a class="btn btn-primary" href="#/triagem">Nova triagem</a>' +
-        '<button type="button" class="btn btn-ghost" data-action="resetar">Restaurar dados de teste</button></div></div>';
+        '<button type="button" class="btn btn-ghost" data-action="resetar">Restaurar dados de teste</button></div></div>');
       return;
     }
     el.hero.className = 'card hero lvl-' + num(p.nivel);
-    el.hero.innerHTML =
-      '<div class="hero-strip"></div>' +
+    setHTML(el.hero, '<div class="hero-strip"></div>' +
       '<div class="hero-body">' +
         '<div class="hero-top"><span class="kicker"><span class="free-dot"></span>' + esc(consultorio) + ' livre · próximo a ser chamado</span>' + badge(p, true) + '</div>' +
         '<div class="hero-id">' + avatar(p) +
@@ -187,7 +192,7 @@
           '<button type="button" class="btn btn-call" data-action="chamar">' + ICON.megafone +
             '<span>Chamar para <strong>' + esc(consultorio) + '</strong></span><kbd>N</kbd></button>' +
         '</div>' +
-      '</div>';
+      '</div>');
   }
 
   function renderUpcoming() {
@@ -196,17 +201,17 @@
     $('upcoming-title').textContent = emAtendimento ? 'Fila de espera' : 'Próximos';
     $('upcoming-count').textContent = seguintes.length ? seguintes.length + ' aguardando' : '';
     if (!seguintes.length) {
-      el.upcoming.innerHTML = '<li class="muted pad">' + (emAtendimento ? 'A fila está vazia.' : 'Sem outros pacientes na sequência.') + '</li>';
+      setHTML(el.upcoming, '<li class="muted pad">' + (emAtendimento ? 'A fila está vazia.' : 'Sem outros pacientes na sequência.') + '</li>');
       return;
     }
-    el.upcoming.innerHTML = seguintes.map(function (s) {
+    setHTML(el.upcoming, seguintes.map(function (s) {
       return '<li><button type="button" class="up-item" data-action="ver" data-id="' + esc(s.id) + '">' +
         '<span class="up-pos mono">' + num(s.ordem) + '</span>' + avatar(s) +
         '<span class="up-info"><strong>' + esc(s.nome) + '</strong><span>' + esc(s.queixa) + '</span></span>' +
         '<span class="up-right"><span class="up-level"><span class="dot lvl-' + num(s.nivel) + '"></span>' + esc(s.nivel_nome) + '</span>' +
         '<span class="up-wait mono wait-' + classeEspera(s) + '">' + fmtEspera(s.espera_min) + '</span></span>' +
         '</button></li>';
-    }).join('');
+    }).join(''));
   }
 
   function renderTabela() {
@@ -228,12 +233,12 @@
     });
 
     if (!lista.length) {
-      el.tbody.innerHTML = '<tr><td colspan="6" class="table-empty">' +
-        (state.total ? 'Nenhum paciente encontrado com os filtros atuais.' : 'A fila está vazia.') + '</td></tr>';
+      setHTML(el.tbody, '<tr><td colspan="6" class="table-empty">' +
+        (state.total ? 'Nenhum paciente encontrado com os filtros atuais.' : 'A fila está vazia.') + '</td></tr>');
       return;
     }
 
-    el.tbody.innerHTML = lista.map(function (p) {
+    setHTML(el.tbody, lista.map(function (p) {
       return '<tr class="row-click" data-action="ver" data-id="' + esc(p.id) + '">' +
         '<td class="c-ord mono">' + num(p.ordem) + '</td>' +
         '<td><div class="cell-person">' + avatar(p) + '<div><div class="cell-primary">' + esc(p.nome) + '</div>' +
@@ -246,15 +251,15 @@
           '<div class="cell-secondary">alvo ' + esc(p.tempo_alvo.replace('Até ', '')) + '</div></td>' +
         '<td class="c-act"><button type="button" class="btn btn-ghost btn-sm" data-action="chamar" data-id="' + esc(p.id) + '" title="Chamar agora">' + ICON.megafone + '<span class="c-hide-sm">Chamar</span></button></td>' +
       '</tr>';
-    }).join('');
+    }).join(''));
   }
 
   function renderHistorico() {
     if (!state.historico.length) {
-      el.hist.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhuma chamada registrada ainda.</td></tr>';
+      setHTML(el.hist, '<tr><td colspan="7" class="table-empty">Nenhuma chamada registrada ainda.</td></tr>');
       return;
     }
-    el.hist.innerHTML = state.historico.map(function (c, i) {
+    setHTML(el.hist, state.historico.map(function (c, i) {
       return '<tr' + (i === 0 ? ' class="row-latest"' : '') + '>' +
         '<td class="mono">' + esc(c.horario) + '</td>' +
         '<td><div class="cell-person">' + avatar(c) + '<div><div class="cell-primary">' + esc(c.nome) + '</div>' +
@@ -268,7 +273,7 @@
         '<td class="c-act">' + (c.status === 'encerrado' ? '' :
           '<button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + num(c.seq) + '">' + ICON.repetir + '<span class="c-hide-sm">Rechamar</span></button>') + '</td>' +
       '</tr>';
-    }).join('');
+    }).join(''));
   }
 
   function renderDrawer() {
@@ -279,8 +284,7 @@
       return;
     }
     el.drawerContent.className = 'drawer-inner lvl-' + num(p.nivel);
-    el.drawerContent.innerHTML =
-      '<div class="drawer-head">' +
+    setHTML(el.drawerContent, '<div class="drawer-head">' +
         '<span class="kicker">Posição ' + num(p.ordem) + ' de ' + num(state.total) + ' na fila</span>' +
         '<button type="button" class="icon-btn" data-action="fechar-drawer" aria-label="Fechar">' + ICON.x + '</button>' +
       '</div>' +
@@ -301,7 +305,7 @@
       '<div class="drawer-actions">' +
         '<button type="button" class="btn btn-ghost btn-danger" data-action="remover" data-id="' + esc(p.id) + '">' + ICON.lixo + 'Remover</button>' +
         '<button type="button" class="btn btn-call" data-action="chamar" data-id="' + esc(p.id) + '">' + ICON.megafone + 'Chamar agora</button>' +
-      '</div>';
+      '</div>');
   }
 
   function renderNav() {
@@ -460,7 +464,7 @@
     el.consult.hidden = !a;
     if (!a) {
       consultSeq = null;
-      el.consult.innerHTML = '';
+      setHTML(el.consult, '');
       return;
     }
 
@@ -477,8 +481,7 @@
     var desfechos = state.desfechos || [];
 
     el.consult.className = 'card consult lvl-' + num(p.nivel);
-    el.consult.innerHTML =
-      '<header class="cs-head">' + avatar(p, 'lg') +
+    setHTML(el.consult, '<header class="cs-head">' + avatar(p, 'lg') +
         '<div class="cs-id"><div class="cs-title"><h2 class="cs-name">' + esc(p.nome) + '</h2>' + badge(p, true) + '</div>' +
           '<p class="cs-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + num(p.idade) + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') +
           ' · chamado às ' + esc(a.inicio) + '<span id="cs-vezes">' + (vezes > 1 ? ' · chamado ' + num(vezes) + 'x' : '') + '</span></p></div>' +
@@ -516,7 +519,7 @@
         '<button type="button" class="btn btn-ghost" data-action="rechamar" data-seq="' + a.seq + '">' + ICON.repetir + 'Rechamar</button>' +
         '<button type="button" class="btn btn-ghost" data-action="encerrar">' + ICON.check + 'Encerrar atendimento</button>' +
         (state.total ? '<button type="button" class="btn btn-call" data-action="encerrar-proximo">Encerrar e chamar próximo' + ICON.proximo + '</button>' : '') +
-      '</footer>';
+      '</footer>');
 
     var form = $('consult-form');
     form.addEventListener('input', agendarSalvamento);
@@ -610,13 +613,13 @@
     menuNivel.className = 'level-menu';
     menuNivel.setAttribute('role', 'menu');
     menuNivel.setAttribute('data-id', id);
-    menuNivel.innerHTML = '<div class="level-menu-title">Reclassificar urgência</div>' + NIVEIS.map(function (n) {
+    setHTML(menuNivel, '<div class="level-menu-title">Reclassificar urgência</div>' + NIVEIS.map(function (n) {
       var atual = n.codigo === p.nivel;
       return '<button type="button" role="menuitemradio" aria-checked="' + atual + '" class="lm-option lvl-' + n.codigo + (atual ? ' current' : '') + '"' +
         ' data-action="definir-nivel" data-id="' + esc(id) + '" data-nivel="' + n.codigo + '">' +
         '<span class="dot"></span><span class="lm-name">' + esc(n.nome) + '</span>' +
         '<span class="lm-target">' + esc(n.alvo) + '</span></button>';
-    }).join('');
+    }).join(''));
     document.body.appendChild(menuNivel);
 
     var r = botao.getBoundingClientRect();
@@ -788,8 +791,7 @@
     ];
     var feitos = checks.filter(function (c) { return c[1]; }).length;
 
-    box.innerHTML =
-      '<div class="pv-band"><span class="kicker">Prévia da triagem</span>' +
+    setHTML(box, '<div class="pv-band"><span class="kicker">Prévia da triagem</span>' +
         '<div class="pv-person"><span class="avatar" aria-hidden="true">' + (t.nome ? esc(iniciais(t.nome)) : '?') + '</span>' +
           '<div><div class="pv-name' + (t.nome ? '' : ' placeholder') + '">' + esc(t.nome || 'Novo paciente') + '</div>' +
           '<div class="pv-meta">' + (meta.length ? esc(meta.join(' · ')) : 'Idade e sexo não informados') + '</div></div></div>' +
@@ -802,7 +804,7 @@
         '<div class="pv-bar"><i style="width:' + Math.round(feitos / checks.length * 100) + '%"></i></div>' +
         '<ul class="pv-checks">' + checks.map(function (c) {
           return '<li' + (c[1] ? ' class="done"' : '') + '>' + c[0] + '</li>';
-        }).join('') + '</ul></div>';
+        }).join('') + '</ul></div>');
   }
 
   el.form.addEventListener('input', renderPreview);
