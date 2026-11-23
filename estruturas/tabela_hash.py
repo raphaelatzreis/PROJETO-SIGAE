@@ -38,15 +38,22 @@ class TabelaHash:
         return paciente
 
     def buscar(self, id_paciente: int):
-        pass
+        if self.esta_vazia():
+            return None
+
+        indice = self._calcular_indice(id_paciente)
+        bucket = self.tabela[indice]
+
+        for par in bucket:
+            if par[0] == id_paciente:
+                return par[1]
+
+        return None
 
     def remover(self, id_paciente: int) -> bool:
         pass
 
     def _redimensionar(self) -> None:
-        pass
-
-    def validar(self) -> bool:
         pass
 
     def validar(self) -> bool:
