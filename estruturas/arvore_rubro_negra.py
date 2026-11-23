@@ -56,3 +56,31 @@ class ArvoreRubroNegra:
         x.direita = y
         y.pai = x
 
+    def inserir(self, horario, id_paciente, dados=None):
+        novo = NoArvore(horario, id_paciente, dados, VERMELHO)
+        novo.esquerda = self.NULO
+        novo.direita = self.NULO
+        novo.pai = self.NULO
+
+        pai = self.NULO
+        atual = self.raiz
+        while atual != self.NULO:
+            pai = atual
+            if novo.chave < atual.chave:
+                atual = atual.esquerda
+            elif novo.chave > atual.chave:
+                atual = atual.direita
+            else:
+                raise ValueError("Chave duplicada na árvore.")
+
+        novo.pai = pai
+        if pai == self.NULO:
+            self.raiz = novo
+        elif novo.chave < pai.chave:
+            pai.esquerda = novo
+        else:
+            pai.direita = novo
+
+        self.ajustar_insercao(novo)
+        return novo
+
