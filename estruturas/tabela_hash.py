@@ -27,6 +27,14 @@ class TabelaHash:
 
     def ocupacao(self) -> float:
         return self.total_pacientes / self.capacidade
+        
+    def listar_pacientes(self) -> list:
+        return [par[1] for bucket in self.tabela for par in bucket]
+
+    def limpar(self) -> None:
+        self.tabela = [[] for _ in range(self.capacidade)]
+        self.total_pacientes = 0
+        self.total_colisoes = 0
 
     def _redimensionar(self) -> None:
         registros_atuais = [
