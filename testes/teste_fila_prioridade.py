@@ -45,10 +45,10 @@ assert fila.ver_proximo().nome == "Brenno"
 print(f"Teste 2 ok: chegaram Marcos (prioridade 4) e Brenno (prioridade 3). "
     f"Próximo: Brenno ({fila.tamanho()} na fila)")
 
-fila.inserir(PacienteTeste(103, "Raphaela", 3, "08:02"))
-assert fila.ver_proximo().nome == "Raphaela"
-print(f"Teste 3 ok: chegou Raphaela (prioridade 3, 08:02), antes de Brenno (08:05). "
-    f"Próximo: Raphaela ({fila.tamanho()} na fila)")
+fila.inserir(PacienteTeste(103, "Raphaela", 3, "08:10"))
+assert fila.ver_proximo().nome == "Brenno"
+print(f"Teste 3 ok: chegou Raphaela (prioridade 3, 08:10). Empata com Brenno, "
+    f"mas ele chegou antes (08:05). Próximo continua Brenno ({fila.tamanho()} na fila)")
 
 fila.inserir(PacienteTeste(104, "Matheus", 1, "08:15"))
 assert fila.ver_proximo().nome == "Matheus"
@@ -83,5 +83,34 @@ try:
     print("Teste 8 FALHOU: deixou reclassificar um número que não está na fila")
 except ValueError:
     print("Teste 8 ok: número 999 não está na fila, reclassificação bloqueada")
+
+removida = fila.remover(103)
+assert removida.nome == "Raphaela"
+assert not fila.esta_na_fila(103)
+assert fila.tamanho() == 3
+assert fila.ver_proximo().nome == "Matheus"
+print(f"Teste 9 ok: Raphaela cancelou o atendimento e saiu do meio da fila. "
+    f"Próximo continua Matheus ({fila.tamanho()} na fila)")
+
+removido = fila.remover(104)
+assert removido.nome == "Matheus"
+assert fila.ver_proximo().nome == "Brenno"
+assert fila.tamanho() == 2
+print(f"Teste 10 ok: Matheus cancelou e saiu da raiz da fila. "
+    f"Próximo: Brenno ({fila.tamanho()} na fila)")
+
+try:
+    fila.remover(999)
+    print("Teste 11 FALHOU: deixou cancelar um número que não está na fila")
+except ValueError:
+    print("Teste 11 ok: número 999 não está na fila, cancelamento bloqueado")
+
+fila.inserir(PacienteTeste(103, "Raphaela", 3, "08:30"))
+assert fila.esta_na_fila(103)
+assert fila.ver_proximo().nome == "Brenno"
+assert fila.tamanho() == 3
+print(f"Teste 12 ok: Raphaela voltou às 08:30 com o mesmo número 103 e entrou no fim da fila "
+    f"da prioridade 3. Próximo continua Brenno (08:05) ({fila.tamanho()} na fila)")
+
 mostrar_painel_de_posicoes(fila)
 print("=== Todos os testes passaram ===")
