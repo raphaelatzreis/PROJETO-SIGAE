@@ -190,3 +190,49 @@ class ArvoreRubroNegra:
             self.ajustar_remocao(x)
         return True
 
+    def ajustar_remocao(self, x):
+        while x != self.raiz and x.cor == PRETO:
+            if x == x.pai.esquerda:
+                irmao = x.pai.direita
+                if irmao.cor == VERMELHO:
+                    irmao.cor = PRETO
+                    x.pai.cor = VERMELHO
+                    self.rotacionar_esquerda(x.pai)
+                    irmao = x.pai.direita
+                if irmao.esquerda.cor == PRETO and irmao.direita.cor == PRETO:
+                    irmao.cor = VERMELHO
+                    x = x.pai
+                else:
+                    if irmao.direita.cor == PRETO:
+                        irmao.esquerda.cor = PRETO
+                        irmao.cor = VERMELHO
+                        self.rotacionar_direita(irmao)
+                        irmao = x.pai.direita
+                    irmao.cor = x.pai.cor
+                    x.pai.cor = PRETO
+                    irmao.direita.cor = PRETO
+                    self.rotacionar_esquerda(x.pai)
+                    x = self.raiz
+            else:
+                irmao = x.pai.esquerda
+                if irmao.cor == VERMELHO:
+                    irmao.cor = PRETO
+                    x.pai.cor = VERMELHO
+                    self.rotacionar_direita(x.pai)
+                    irmao = x.pai.esquerda
+                if irmao.direita.cor == PRETO and irmao.esquerda.cor == PRETO:
+                    irmao.cor = VERMELHO
+                    x = x.pai
+                else:
+                    if irmao.esquerda.cor == PRETO:
+                        irmao.direita.cor = PRETO
+                        irmao.cor = VERMELHO
+                        self.rotacionar_esquerda(irmao)
+                        irmao = x.pai.esquerda
+                    irmao.cor = x.pai.cor
+                    x.pai.cor = PRETO
+                    irmao.esquerda.cor = PRETO
+                    self.rotacionar_direita(x.pai)
+                    x = self.raiz
+        x.cor = PRETO
+
