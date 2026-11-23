@@ -1,6 +1,6 @@
 # SIGAE — Árvore Rubro-Negra (Memória Cronológica)
 
-Implementação da **Issue 1 (Integrante 1)** do trabalho final **SIGAE (Estrutura de Dados Avançados)**.
+Implementação da **Issue 1 (Integrante Responsável: Matheus Duarte)** do trabalho final **SIGAE (Estrutura de Dados Avançados)**.
 
 Este módulo implementa do zero, em Python puro e **sem uso de bibliotecas**, uma **Árvore Rubro-Negra** responsável por manter os pacientes indexados em ordem cronológica de chegada.
 
