@@ -236,3 +236,26 @@ class ArvoreRubroNegra:
                     x = self.raiz
         x.cor = PRETO
 
+    def validar(self):
+        if self.raiz == self.NULO:
+            return True
+        if self.raiz.cor != PRETO:
+            return False
+        return self._validar_no(self.raiz, None, None) != -1
+
+    def _validar_no(self, no, min_chave, max_chave):
+        if no == self.NULO:
+            return 1
+        if min_chave is not None and no.chave <= min_chave:
+            return -1
+        if max_chave is not None and no.chave >= max_chave:
+            return -1
+        if no.cor == VERMELHO and (no.esquerda.cor == VERMELHO or no.direita.cor == VERMELHO):
+            return -1
+
+        alt_esq = self._validar_no(no.esquerda, min_chave, no.chave)
+        alt_dir = self._validar_no(no.direita, no.chave, max_chave)
+        if alt_esq == -1 or alt_dir == -1 or alt_esq != alt_dir:
+            return -1
+
+        return alt_esq + (1 if no.cor == PRETO else 0)
