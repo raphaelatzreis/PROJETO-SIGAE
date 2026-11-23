@@ -158,3 +158,21 @@ class FilaPrioridade:
                 self.descer(posicao_depois_de_subir)
 
             return pessoa_removida
+        
+
+    # ---------- regras de comparacao SIGAE ----------
+
+def paciente_vem_antes(paciente_avaliado, paciente_comparado):
+    if paciente_avaliado.prioridade != paciente_comparado.prioridade:
+        return paciente_avaliado.prioridade < paciente_comparado.prioridade
+    if paciente_avaliado.horario != paciente_comparado.horario:
+        return paciente_avaliado.horario < paciente_comparado.horario
+    return paciente_avaliado.id < paciente_comparado.id
+
+
+def medico_vem_antes(medico_avaliado, medico_comparado):
+    if medico_avaliado.atendimentos != medico_comparado.atendimentos:
+        return medico_avaliado.atendimentos < medico_comparado.atendimentos
+    if medico_avaliado.ordem_cadastro != medico_comparado.ordem_cadastro:
+        return medico_avaliado.ordem_cadastro < medico_comparado.ordem_cadastro
+    return medico_avaliado.id < medico_comparado.id
