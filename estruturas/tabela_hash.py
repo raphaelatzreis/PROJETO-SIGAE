@@ -1,6 +1,8 @@
 class TabelaHash:
     """Tabela Hash do SIGAE para localizar pacientes por ID com encadeamento separado."""
 
+    FATOR_CARGA_MAXIMO = 0.75
+
     def __init__(self, capacidade: int = 11):
         if capacidade <= 0:
             raise ValueError("A capacidade inicial da TabelaHash deve ser maior que zero.")
@@ -21,6 +23,18 @@ class TabelaHash:
     def ocupacao(self) -> float:
         return self.total_pacientes / self.capacidade
 
+    def _redimensionar(self) -> None:
+        registros_atuais = [
+            par for bucket in self.tabela for par in bucket
+        ]
+        self.capacidade *= 2
+        self.tabela = [[] for _ in range(self.capacidade)]
+        self.total_pacientes = 0
+        self.total_colisoes = 0
+
+        for id_paciente, paciente in registros_atuais:
+            self.inserir(id_paciente, paciente)
+
     def inserir(self, id_paciente: int, paciente):
         indice = self._calcular_indice(id_paciente)
         bucket = self.tabela[indice]
@@ -29,6 +43,11 @@ class TabelaHash:
             if par[0] == id_paciente:
                 par[1] = paciente
                 return paciente
+
+        if self.ocupacao() > self.FATOR_CARGA_MAXIMO:
+            self._redimensionar()
+            indice = self._calcular_indice(id_paciente)
+            bucket = self.tabela[indice]
 
         if len(bucket) > 0:
             self.total_colisoes += 1
@@ -65,7 +84,7 @@ class TabelaHash:
 
         return False
 
-    def _redimensionar(self) -> None:
+    def validar(self) -> bool:
         pass
 
     def validar(self) -> bool:
