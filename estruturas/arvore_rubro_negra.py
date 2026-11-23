@@ -116,3 +116,20 @@ class ArvoreRubroNegra:
                     self.rotacionar_esquerda(z.pai.pai)
         self.raiz.cor = PRETO
 
+    def buscar(self, horario, id_paciente):
+        chave = (horario, id_paciente)
+        atual = self.raiz
+        while atual != self.NULO:
+            if chave == atual.chave:
+                return atual
+            atual = atual.esquerda if chave < atual.chave else atual.direita
+        return None
+
+    def menor_elemento(self, no=None):
+        atual = self.raiz if no is None else no
+        if atual == self.NULO:
+            return None
+        while atual.esquerda != self.NULO:
+            atual = atual.esquerda
+        return atual
+
