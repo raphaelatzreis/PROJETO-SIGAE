@@ -22,7 +22,20 @@ class TabelaHash:
         return self.total_pacientes / self.capacidade
 
     def inserir(self, id_paciente: int, paciente):
-        pass
+        indice = self._calcular_indice(id_paciente)
+        bucket = self.tabela[indice]
+
+        for par in bucket:
+            if par[0] == id_paciente:
+                par[1] = paciente
+                return paciente
+
+        if len(bucket) > 0:
+            self.total_colisoes += 1
+
+        bucket.append([id_paciente, paciente])
+        self.total_pacientes += 1
+        return paciente
 
     def buscar(self, id_paciente: int):
         pass
@@ -31,6 +44,9 @@ class TabelaHash:
         pass
 
     def _redimensionar(self) -> None:
+        pass
+
+    def validar(self) -> bool:
         pass
 
     def validar(self) -> bool:
