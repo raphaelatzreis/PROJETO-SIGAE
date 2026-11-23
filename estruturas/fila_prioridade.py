@@ -138,3 +138,23 @@ class FilaPrioridade:
         self.descer(posicao_depois_de_subir)
 
         return pessoa_reclassificada
+    
+    def remover(self, id_pessoa):
+            posicao_de_quem_sai = self._buscar_posicao(id_pessoa)
+            if posicao_de_quem_sai is None:
+                raise ValueError(f"O id {id_pessoa} não está na fila.")
+
+            pessoa_removida = self.fila[posicao_de_quem_sai]
+            posicao_da_ultima_pessoa = len(self.fila) - 1
+
+            self._trocar(posicao_de_quem_sai, posicao_da_ultima_pessoa)
+            self.fila.pop()
+            self._apagar_posicao(pessoa_removida.id)
+
+            if posicao_de_quem_sai < len(self.fila):
+                pessoa_que_ocupou_o_lugar = self.fila[posicao_de_quem_sai]
+                self.subir(posicao_de_quem_sai)
+                posicao_depois_de_subir = self._buscar_posicao(pessoa_que_ocupou_o_lugar.id)
+                self.descer(posicao_depois_de_subir)
+
+            return pessoa_removida
