@@ -51,7 +51,19 @@ class TabelaHash:
         return None
 
     def remover(self, id_paciente: int) -> bool:
-        pass
+        if self.esta_vazia():
+            return False
+
+        indice = self._calcular_indice(id_paciente)
+        bucket = self.tabela[indice]
+
+        for i, par in enumerate(bucket):
+            if par[0] == id_paciente:
+                bucket.pop(i)
+                self.total_pacientes -= 1
+                return True
+
+        return False
 
     def _redimensionar(self) -> None:
         pass
