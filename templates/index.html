@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIGAE — Triagem e Fila de Emergência</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23e5484d'/%3E%3Cpath d='M13 7h6v6h6v6h-6v6h-6v-6H7v-6h6z' fill='white'/%3E%3C/svg%3E">
+  <script>
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('sigae-theme'); } catch (e) {}
+      var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.documentElement.setAttribute('data-theme', saved || (prefersDark ? 'dark' : 'light'));
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="app">
+    <!-- ============ Barra lateral ============ -->
+    <aside class="sidebar" aria-label="Navegação principal">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16"><path d="M9.5 3h5v6.5H21v5h-6.5V21h-5v-6.5H3v-5h6.5z" fill="currentColor"/></svg>
+        </span>
+        <div class="brand-text">
+          <span class="brand-name">SIGAE</span>
+          <span class="brand-sub">Emergência</span>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <a href="#/atendimento" class="nav-item" data-route="atendimento">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+          <span>Atendimento</span>
+        </a>
+        <a href="#/fila" class="nav-item" data-route="fila">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <span>Fila</span>
+          <span class="nav-count mono" id="nav-count-fila">{{ estado.total }}</span>
+        </a>
+        <a href="#/triagem" class="nav-item" data-route="triagem">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+          <span>Nova triagem</span>
+        </a>
+        <a href="#/historico" class="nav-item" data-route="historico">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>Histórico</span>
+          <span class="nav-count mono" id="nav-count-historico">{{ estado.historico|length }}</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-foot">
+        <a href="{{ url_for('painel') }}" target="_blank" rel="noopener" class="tv-link">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+          <span>
+            <strong>Abrir telão</strong>
+            <small>Painel da sala de espera</small>
+          </span>
+        </a>
+        <div class="shortcuts">
+          <span><kbd>N</kbd> chamar próximo</span>
+          <span><kbd>R</kbd> rechamar</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ============ Área principal ============ -->
+    <div class="main">
+      <header class="topbar">
+        <div class="topbar-title">
+          <h1 id="page-title">Atendimento</h1>
+          <p id="page-subtitle">Visão geral da fila e chamadas</p>
+        </div>
+        <div class="topbar-actions">
+          <label class="select-wrap" title="Local para onde o paciente será chamado">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg>
+            <select id="consultorio-select" aria-label="Consultório de atendimento">
+              {% for c in estado.consultorios %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+          </label>
+          <button type="button" class="icon-btn" id="theme-toggle" title="Alternar tema">
+            <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+            <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+          </button>
+          <span class="clock mono" id="clock">--:--:--</span>
+        </div>
+      </header>
+
+      <main class="content">
+        <!-- ===== Atendimento ===== -->
+        <section class="view" data-view="atendimento">
+          <div class="dash-stack" id="dash" data-mode="livre">
+            <article class="card hero" id="hero-card"></article>
+            <article class="card consult" id="consult-card" hidden></article>
+
+            <article class="card upcoming-card">
+              <header class="card-head">
+                <h2><span id="upcoming-title">Próximos</span> <span class="card-count" id="upcoming-count"></span></h2>
+                <a href="#/fila" class="link-sm">Ver fila completa →</a>
+              </header>
+              <ol class="upcoming" id="upcoming-list"></ol>
+            </article>
+          </div>
+        </section>
+
+        <!-- ===== Fila ===== -->
+        <section class="view" data-view="fila" hidden>
+          <div class="toolbar">
+            <div class="chips" id="filter-group" role="group" aria-label="Filtrar por nível de emergência">
+              <button type="button" class="chip active" data-nivel="todos">Todos <span class="chip-count mono" data-count="todos">0</span></button>
+              {% for codigo, info in niveis.items() %}
+              <button type="button" class="chip" data-nivel="{{ codigo }}">
+                <span class="dot lvl-{{ codigo }}"></span>{{ info.nome }}
+                <span class="chip-count mono" data-count="{{ codigo }}">0</span>
+              </button>
+              {% endfor %}
+            </div>
+            <div class="search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input type="search" id="search-input" placeholder="Buscar nome, prontuário ou queixa" autocomplete="off">
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="c-ord">#</th>
+                  <th>Paciente</th>
+                  <th>Nível</th>
+                  <th class="c-hide-sm">Queixa principal</th>
+                  <th class="c-wait">Espera</th>
+                  <th class="c-act"><span class="sr-only">Ações</span></th>
+                </tr>
+              </thead>
+              <tbody id="patients-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- ===== Triagem ===== -->
+        <section class="view" data-view="triagem" hidden>
+          <div class="triage-layout">
+          <form class="card form-card" id="triage-form" novalidate>
+            <div class="form-section">
+              <h2><span class="step">1</span>Identificação</h2>
+              <div class="form-grid">
+                <label class="field span-2">
+                  <span>Nome completo</span>
+                  <input name="nome" type="text" required minlength="3" autocomplete="off" placeholder="Ex.: Ana Paula Ribeiro">
+                </label>
+                <label class="field">
+                  <span>Idade</span>
+                  <span class="input-unit"><input name="idade" type="number" min="0" max="130" required placeholder="0"><i>anos</i></span>
+                </label>
+                <div class="field">
+                  <span>Sexo</span>
+                  <div class="segmented" role="radiogroup">
+                    <label><input type="radio" name="sexo" value="F" required><span>Feminino</span></label>
+                    <label><input type="radio" name="sexo" value="M"><span>Masculino</span></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h2><span class="step">2</span>Classificação de risco <small>Protocolo de Manchester</small></h2>
+              <div class="level-picker" role="radiogroup">
+                {% for codigo, info in niveis.items() %}
+                <label class="level-card lvl-{{ codigo }}">
+                  <input type="radio" name="nivel" value="{{ codigo }}" required>
+                  <span class="lc-body">
+                    <span class="lc-head">
+                      <span class="lc-num">{{ codigo }}</span>
+                      <svg class="lc-check" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>
+                    </span>
+                    <strong>{{ info.nome }}</strong>
+                    <small><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>{{ info.tempo_alvo }}</small>
+                  </span>
+                </label>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="form-section">
+              <h2><span class="step">3</span>Queixa e sinais vitais</h2>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Queixa principal</span>
+                  <textarea name="queixa" rows="3" required placeholder="Descreva o motivo da procura, início dos sintomas, intensidade…"></textarea>
+                </label>
+                <label class="field" data-vital="pa">
+                  <span>Pressão arterial</span>
+                  <span class="input-unit"><input name="pa" type="text" placeholder="120/80" inputmode="numeric"><i>mmHg</i></span>
+                </label>
+                <label class="field" data-vital="fc">
+                  <span>Freq. cardíaca</span>
+                  <span class="input-unit"><input name="fc" type="number" min="20" max="250" placeholder="80"><i>bpm</i></span>
+                </label>
+                <label class="field" data-vital="temp">
+                  <span>Temperatura</span>
+                  <span class="input-unit"><input name="temp" type="number" step="0.1" min="30" max="45" placeholder="36.5"><i>°C</i></span>
+                </label>
+                <label class="field" data-vital="spo2">
+                  <span>Saturação</span>
+                  <span class="input-unit"><input name="spo2" type="number" min="50" max="100" placeholder="98"><i>SpO₂ %</i></span>
+                </label>
+                <label class="field span-4">
+                  <span>Observações <em>opcional</em></span>
+                  <input name="observacoes" type="text" placeholder="Alergias, medicamentos em uso, acompanhante…">
+                </label>
+              </div>
+            </div>
+
+            <div class="form-foot">
+              <p class="form-error" id="form-error" role="alert"></p>
+              <button type="reset" class="btn btn-ghost">Limpar</button>
+              <button type="submit" class="btn btn-primary">Adicionar à fila</button>
+            </div>
+          </form>
+
+          <aside class="triage-aside">
+            <div class="card preview" id="triage-preview" aria-live="polite"></div>
+          </aside>
+          </div>
+        </section>
+
+        <!-- ===== Histórico ===== -->
+        <section class="view" data-view="historico" hidden>
+          <div class="card table-card">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Horário</th>
+                  <th>Paciente</th>
+                  <th>Nível</th>
+                  <th>Local</th>
+                  <th class="c-hide-sm">Espera</th>
+                  <th>Situação</th>
+                  <th class="c-act"><span class="sr-only">Ações</span></th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ Gaveta: ver paciente ============ -->
+  <div class="drawer-backdrop" id="drawer-backdrop" hidden></div>
+  <aside class="drawer" id="drawer" aria-hidden="true" aria-labelledby="drawer-title" role="dialog">
+    <div class="drawer-inner" id="drawer-content"></div>
+  </aside>
+
+  <!-- ============ Overlay de chamada ============ -->
+  <div class="call-overlay" id="call-overlay" hidden>
+    <div class="call-box" role="alertdialog" aria-live="assertive">
+      <div class="call-pulse" aria-hidden="true">
+        <span></span><span></span>
+        <svg viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      </div>
+      <p class="call-kicker" id="call-kicker">Chamando</p>
+      <p class="call-name" id="call-name"></p>
+      <p class="call-place" id="call-place"></p>
+      <div class="call-actions">
+        <button type="button" class="btn btn-ghost" id="call-repeat">Rechamar</button>
+        <button type="button" class="btn btn-primary" id="call-close">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+
+  <script>window.__INITIAL_STATE__ = {{ estado | tojson }};</script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
