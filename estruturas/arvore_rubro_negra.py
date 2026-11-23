@@ -84,3 +84,35 @@ class ArvoreRubroNegra:
         self.ajustar_insercao(novo)
         return novo
 
+    def ajustar_insercao(self, z):
+        while z.pai.cor == VERMELHO:
+            if z.pai == z.pai.pai.esquerda:
+                tio = z.pai.pai.direita
+                if tio.cor == VERMELHO:
+                    z.pai.cor = PRETO
+                    tio.cor = PRETO
+                    z.pai.pai.cor = VERMELHO
+                    z = z.pai.pai
+                else:
+                    if z == z.pai.direita:
+                        z = z.pai
+                        self.rotacionar_esquerda(z)
+                    z.pai.cor = PRETO
+                    z.pai.pai.cor = VERMELHO
+                    self.rotacionar_direita(z.pai.pai)
+            else:
+                tio = z.pai.pai.esquerda
+                if tio.cor == VERMELHO:
+                    z.pai.cor = PRETO
+                    tio.cor = PRETO
+                    z.pai.pai.cor = VERMELHO
+                    z = z.pai.pai
+                else:
+                    if z == z.pai.esquerda:
+                        z = z.pai
+                        self.rotacionar_direita(z)
+                    z.pai.cor = PRETO
+                    z.pai.pai.cor = VERMELHO
+                    self.rotacionar_esquerda(z.pai.pai)
+        self.raiz.cor = PRETO
+
