@@ -4,7 +4,7 @@ import sys
 pasta_do_projeto = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(pasta_do_projeto)
 
-from estruturas.fila_prioridade import FilaPrioridade
+from estruturas.fila_prioridade import FilaPrioridade, paciente_vem_antes, medico_vem_antes
 
 
 class PacienteTeste:
@@ -15,20 +15,20 @@ class PacienteTeste:
         self.horario = horario
 
 
-def paciente_vem_antes(paciente_avaliado, paciente_comparado):
-    if paciente_avaliado.prioridade != paciente_comparado.prioridade:
-        return paciente_avaliado.prioridade < paciente_comparado.prioridade
-    if paciente_avaliado.horario != paciente_comparado.horario:
-        return paciente_avaliado.horario < paciente_comparado.horario
-    return paciente_avaliado.id < paciente_comparado.id
+class MedicoTeste:
+    def __init__(self, id, nome, atendimentos, ordem_cadastro):
+        self.id = id
+        self.nome = nome
+        self.atendimentos = atendimentos
+        self.ordem_cadastro = ordem_cadastro
 
 
 def mostrar_painel_de_posicoes(fila):
-    print("Painel de posições (número de atendimento: posição):")
-    for numero_de_atendimento in range(len(fila.posicoes)):
-        posicao = fila.posicoes[numero_de_atendimento]
+    print("Painel de posições (id: posição):")
+    for id_pessoa in range(len(fila.posicoes)):
+        posicao = fila.posicoes[id_pessoa]
         if posicao is not None:
-            print(f"  {numero_de_atendimento}: {posicao}")
+            print(f"  {id_pessoa}: {posicao}")
 
 
 print("=== Teste da fila de pacientes ===")
@@ -113,4 +113,45 @@ print(f"Teste 12 ok: Raphaela voltou às 08:30 com o mesmo número 103 e entrou 
     f"da prioridade 3. Próximo continua Brenno (08:05) ({fila.tamanho()} na fila)")
 
 mostrar_painel_de_posicoes(fila)
+
+
+print()
+print("=== Teste da fila de médicos ===")
+
+fila_medicos = FilaPrioridade(medico_vem_antes)
+
+fila_medicos.inserir(MedicoTeste(1, "Dra. Ana", 3, 1))
+fila_medicos.inserir(MedicoTeste(2, "Dr. Bruno", 1, 2))
+fila_medicos.inserir(MedicoTeste(3, "Dra. Carla", 1, 3))
+assert fila_medicos.ver_proximo().nome == "Dr. Bruno"
+print(f"Teste 13 ok: Dra. Ana (3 atendimentos), Dr. Bruno (1) e Dra. Carla (1) disponíveis. "
+    f"Bruno e Carla empatam, mas Bruno foi cadastrado antes. Próximo: Dr. Bruno "
+    f"({fila_medicos.tamanho()} disponíveis)")
+
+bruno = fila_medicos.remover_minimo()
+assert bruno.nome == "Dr. Bruno"
+assert not fila_medicos.esta_na_fila(2)
+assert fila_medicos.ver_proximo().nome == "Dra. Carla"
+print(f"Teste 14 ok: Dr. Bruno foi chamado e ficou ocupado, saindo da fila. "
+    f"Próximo: Dra. Carla ({fila_medicos.tamanho()} disponíveis)")
+
+bruno.atendimentos = bruno.atendimentos + 1
+fila_medicos.inserir(bruno)
+assert fila_medicos.ver_proximo().nome == "Dra. Carla"
+assert fila_medicos.tamanho() == 3
+print(f"Teste 15 ok: Dr. Bruno concluiu o atendimento (agora com 2) e voltou à fila. "
+    f"Próximo continua Dra. Carla (1) ({fila_medicos.tamanho()} disponíveis)")
+
+carla = fila_medicos.remover_minimo()
+assert carla.nome == "Dra. Carla"
+assert fila_medicos.ver_proximo().nome == "Dr. Bruno"
+print(f"Teste 16 ok: Dra. Carla foi chamada. Próximo: Dr. Bruno (2 atendimentos), "
+    f"à frente da Dra. Ana (3) ({fila_medicos.tamanho()} disponíveis)")
+
+fila_medicos.remover_minimo()
+fila_medicos.remover_minimo()
+assert fila_medicos.esta_vazia()
+assert fila_medicos.remover_minimo() is None
+print("Teste 17 ok: todos os médicos ocupados, a chamada do próximo fica bloqueada (nenhum disponível)")
+
 print("=== Todos os testes passaram ===")
