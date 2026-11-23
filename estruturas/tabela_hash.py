@@ -10,10 +10,16 @@ class TabelaHash:
         self.total_colisoes = 0
 
     def _calcular_indice(self, id_paciente: int) -> int:
-        pass
+        return id_paciente % self.capacidade
+
+    def esta_vazia(self) -> bool:
+        return self.total_pacientes == 0
+
+    def quantidade(self) -> int:
+        return self.total_pacientes
 
     def ocupacao(self) -> float:
-        pass
+        return self.total_pacientes / self.capacidade
 
     def inserir(self, id_paciente: int, paciente):
         pass
