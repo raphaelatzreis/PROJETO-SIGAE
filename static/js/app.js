@@ -44,6 +44,11 @@
   // ---------------------------------------------------------------------------
   // Utilidades
   // ---------------------------------------------------------------------------
+  function num(v) {
+    var n = Number(v);
+    return isFinite(n) ? n : 0;
+  }
+
   function esc(t) {
     return String(t == null ? '' : t)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -73,12 +78,12 @@
   }
 
   function badge(p, compacto) {
-    return '<span class="badge lvl-' + p.nivel + (compacto ? ' badge-sm' : '') + '"><span class="dot"></span>' +
+    return '<span class="badge lvl-' + num(p.nivel) + (compacto ? ' badge-sm' : '') + '"><span class="dot"></span>' +
       (compacto ? '' : 'Nível ' + p.nivel + ' · ') + esc(p.nivel_nome) + '</span>';
   }
 
   function avatar(p, tamanho) {
-    return '<span class="avatar lvl-' + p.nivel + (tamanho ? ' avatar-' + tamanho : '') + '" aria-hidden="true">' + esc(iniciais(p.nome)) + '</span>';
+    return '<span class="avatar lvl-' + num(p.nivel) + (tamanho ? ' avatar-' + tamanho : '') + '" aria-hidden="true">' + esc(iniciais(p.nome)) + '</span>';
   }
 
   var ICON = {
@@ -100,9 +105,12 @@
   ];
 
   function api(metodo, url, corpo) {
+    if (!corpo && metodo !== 'GET' && metodo !== 'DELETE') corpo = {};
     return fetch(url, {
       method: metodo,
-      headers: corpo ? { 'Content-Type': 'application/json' } : {},
+      headers: corpo
+        ? { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' }
+        : { 'X-Requested-With': 'fetch' },
       body: corpo ? JSON.stringify(corpo) : undefined
     }).then(function (r) {
       return r.json().then(function (dados) {
@@ -162,14 +170,14 @@
         '<button type="button" class="btn btn-ghost" data-action="resetar">Restaurar dados de teste</button></div></div>';
       return;
     }
-    el.hero.className = 'card hero lvl-' + p.nivel;
+    el.hero.className = 'card hero lvl-' + num(p.nivel);
     el.hero.innerHTML =
       '<div class="hero-strip"></div>' +
       '<div class="hero-body">' +
         '<div class="hero-top"><span class="kicker"><span class="free-dot"></span>' + esc(consultorio) + ' livre · próximo a ser chamado</span>' + badge(p, true) + '</div>' +
         '<div class="hero-id">' + avatar(p) +
           '<div><h2 class="hero-name">' + esc(p.nome) + '</h2>' +
-          '<p class="hero-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + p.idade + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + ' · chegou ' + esc(p.chegada) + '</p></div>' +
+          '<p class="hero-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + num(p.idade) + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + ' · chegou ' + esc(p.chegada) + '</p></div>' +
         '</div>' +
         '<p class="hero-complaint">' + esc(p.queixa) + '</p>' +
         vitais(p.sinais) +
@@ -193,9 +201,9 @@
     }
     el.upcoming.innerHTML = seguintes.map(function (s) {
       return '<li><button type="button" class="up-item" data-action="ver" data-id="' + esc(s.id) + '">' +
-        '<span class="up-pos mono">' + s.ordem + '</span>' + avatar(s) +
+        '<span class="up-pos mono">' + num(s.ordem) + '</span>' + avatar(s) +
         '<span class="up-info"><strong>' + esc(s.nome) + '</strong><span>' + esc(s.queixa) + '</span></span>' +
-        '<span class="up-right"><span class="up-level"><span class="dot lvl-' + s.nivel + '"></span>' + esc(s.nivel_nome) + '</span>' +
+        '<span class="up-right"><span class="up-level"><span class="dot lvl-' + num(s.nivel) + '"></span>' + esc(s.nivel_nome) + '</span>' +
         '<span class="up-wait mono wait-' + classeEspera(s) + '">' + fmtEspera(s.espera_min) + '</span></span>' +
         '</button></li>';
     }).join('');
@@ -227,10 +235,10 @@
 
     el.tbody.innerHTML = lista.map(function (p) {
       return '<tr class="row-click" data-action="ver" data-id="' + esc(p.id) + '">' +
-        '<td class="c-ord mono">' + p.ordem + '</td>' +
+        '<td class="c-ord mono">' + num(p.ordem) + '</td>' +
         '<td><div class="cell-person">' + avatar(p) + '<div><div class="cell-primary">' + esc(p.nome) + '</div>' +
-          '<div class="cell-secondary"><span class="mono">' + esc(p.id) + '</span> · ' + p.idade + ' anos · ' + esc(p.sexo) + '</div></div></div></td>' +
-        '<td><button type="button" class="badge badge-sm badge-edit lvl-' + p.nivel + '" data-action="nivel" data-id="' + esc(p.id) + '"' +
+          '<div class="cell-secondary"><span class="mono">' + esc(p.id) + '</span> · ' + num(p.idade) + ' anos · ' + esc(p.sexo) + '</div></div></div></td>' +
+        '<td><button type="button" class="badge badge-sm badge-edit lvl-' + num(p.nivel) + '" data-action="nivel" data-id="' + esc(p.id) + '"' +
           ' title="Alterar nível de urgência" aria-haspopup="menu"><span class="dot"></span>' + esc(p.nivel_nome) +
           '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button></td>' +
         '<td class="c-hide-sm cell-complaint">' + esc(p.queixa) + '</td>' +
@@ -250,7 +258,7 @@
       return '<tr' + (i === 0 ? ' class="row-latest"' : '') + '>' +
         '<td class="mono">' + esc(c.horario) + '</td>' +
         '<td><div class="cell-person">' + avatar(c) + '<div><div class="cell-primary">' + esc(c.nome) + '</div>' +
-          '<div class="cell-secondary mono">' + esc(c.senha) + ' · ' + esc(c.id) + (c.vezes > 1 ? ' · chamado ' + c.vezes + 'x' : '') + '</div></div></div></td>' +
+          '<div class="cell-secondary mono">' + esc(c.senha) + ' · ' + esc(c.id) + (c.vezes > 1 ? ' · chamado ' + num(c.vezes) + 'x' : '') + '</div></div></div></td>' +
         '<td>' + badge(c, true) + '</td>' +
         '<td>' + esc(c.consultorio) + '</td>' +
         '<td class="c-hide-sm mono">' + fmtEspera(c.espera_min) + '</td>' +
@@ -258,7 +266,7 @@
           ? '<span class="status status-done">' + esc(c.desfecho_nome) + '</span><div class="cell-secondary">' + fmtEspera(c.duracao_min) + ' de consulta · ' + esc(c.fim) + '</div>'
           : '<span class="status status-live"><span class="live-dot"></span>Em atendimento</span>') + '</td>' +
         '<td class="c-act">' + (c.status === 'encerrado' ? '' :
-          '<button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + c.seq + '">' + ICON.repetir + '<span class="c-hide-sm">Rechamar</span></button>') + '</td>' +
+          '<button type="button" class="btn btn-ghost btn-sm" data-action="rechamar" data-seq="' + num(c.seq) + '">' + ICON.repetir + '<span class="c-hide-sm">Rechamar</span></button>') + '</td>' +
       '</tr>';
     }).join('');
   }
@@ -270,10 +278,10 @@
       fecharDrawer();
       return;
     }
-    el.drawerContent.className = 'drawer-inner lvl-' + p.nivel;
+    el.drawerContent.className = 'drawer-inner lvl-' + num(p.nivel);
     el.drawerContent.innerHTML =
       '<div class="drawer-head">' +
-        '<span class="kicker">Posição ' + p.ordem + ' de ' + state.total + ' na fila</span>' +
+        '<span class="kicker">Posição ' + num(p.ordem) + ' de ' + num(state.total) + ' na fila</span>' +
         '<button type="button" class="icon-btn" data-action="fechar-drawer" aria-label="Fechar">' + ICON.x + '</button>' +
       '</div>' +
       '<div class="drawer-id">' + avatar(p, 'xl') +
@@ -281,7 +289,7 @@
         '<p class="mono muted">Senha <strong>' + esc(p.senha) + '</strong> · ' + esc(p.id) + '</p></div></div>' +
       '<div class="drawer-badge">' + badge(p) + '</div>' +
       '<dl class="facts">' +
-        '<div><dt>Idade</dt><dd>' + p.idade + ' anos</dd></div>' +
+        '<div><dt>Idade</dt><dd>' + num(p.idade) + ' anos</dd></div>' +
         '<div><dt>Sexo</dt><dd>' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') + '</dd></div>' +
         '<div><dt>Chegada</dt><dd class="mono">' + esc(p.chegada) + '</dd></div>' +
         '<div><dt>Tempo-alvo</dt><dd>' + esc(p.tempo_alvo) + '</dd></div>' +
@@ -358,7 +366,7 @@
   // ---------------------------------------------------------------------------
   function mostrarChamada(evento) {
     var c = evento.chamada;
-    el.overlay.className = 'call-overlay lvl-' + c.nivel;
+    el.overlay.className = 'call-overlay lvl-' + num(c.nivel);
     el.callKicker.textContent = evento.tipo === 'rechamada' ? 'Rechamando' : 'Chamando';
     el.callName.textContent = c.nome;
     el.callPlace.textContent = c.consultorio;
@@ -461,19 +469,19 @@
     if (consultSeq === a.seq) {
       // Mesmo atendimento: não reconstrói o formulário (o médico pode estar digitando)
       var v = $('cs-vezes');
-      if (v) v.textContent = vezes > 1 ? ' · chamado ' + vezes + 'x' : '';
+      if (v) v.textContent = vezes > 1 ? ' · chamado ' + num(vezes) + 'x' : '';
       return;
     }
     consultSeq = a.seq;
     var pr = a.prontuario || {};
     var desfechos = state.desfechos || [];
 
-    el.consult.className = 'card consult lvl-' + p.nivel;
+    el.consult.className = 'card consult lvl-' + num(p.nivel);
     el.consult.innerHTML =
       '<header class="cs-head">' + avatar(p, 'lg') +
         '<div class="cs-id"><div class="cs-title"><h2 class="cs-name">' + esc(p.nome) + '</h2>' + badge(p, true) + '</div>' +
-          '<p class="cs-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + p.idade + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') +
-          ' · chamado às ' + esc(a.inicio) + '<span id="cs-vezes">' + (vezes > 1 ? ' · chamado ' + vezes + 'x' : '') + '</span></p></div>' +
+          '<p class="cs-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + num(p.idade) + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') +
+          ' · chamado às ' + esc(a.inicio) + '<span id="cs-vezes">' + (vezes > 1 ? ' · chamado ' + num(vezes) + 'x' : '') + '</span></p></div>' +
         '<div class="cs-timer"><span class="live-dot"></span><span>Em atendimento</span><strong class="mono" id="cs-timer">00:00</strong></div>' +
       '</header>' +
       '<div class="cs-body">' +

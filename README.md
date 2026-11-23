@@ -5,11 +5,23 @@ Sistema Integrado de Gestão e Atendimento de Emergência (SIGAE) - Projeto de E
 
 ```bash
 pip install -r requirements.txt
-python main.py
+python app.py
 ```
 
 - Painel do operador: http://127.0.0.1:5000
 - Telão da sala de espera: http://127.0.0.1:5000/painel
+
+## Estrutura do projeto
+
+```
+PROJETO-SIGAE/
+├── app.py          # servidor Flask: rotas HTTP e páginas
+├── estruturas/     # estruturas de dados: Árvore Rubro-Negra, Filas de Prioridade (Min-Heap), Tabela Hash
+├── servico/        # camada de serviço: classes Paciente/Medico e regras de negócio
+├── templates/      # páginas HTML (painel do operador e telão)
+├── static/         # CSS e JavaScript da interface
+└── tests/          # testes automatizados
+```
 
 ## Funcionalidades
 

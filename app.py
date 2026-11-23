@@ -1,10 +1,12 @@
 from copy import deepcopy
 from datetime import datetime, timedelta
+import os
 from threading import Lock
 
 from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # 64 KB
 
 NIVEIS_EMERGENCIA = {
     1: {"codigo": 1, "slug": "emergencia", "nome": "Emergência", "tempo_alvo": "Imediato", "alvo_min": 0},
@@ -173,6 +175,34 @@ def _erro(msg, status=400):
     return jsonify({"erro": msg}), status
 
 
+def _json_body():
+    """Corpo JSON da requisição; qualquer coisa que não seja objeto vira {}."""
+    dados = request.get_json(silent=True)
+    return dados if isinstance(dados, dict) else {}
+
+
+@app.before_request
+def _exigir_json_em_mutacoes():
+    """Proteção CSRF: mutações na API exigem JSON e header customizado (força preflight CORS)."""
+    if request.method in ("POST", "PATCH", "DELETE", "PUT") and request.path.startswith("/api/"):
+        if request.method != "DELETE" and not request.is_json:
+            return _erro("Content-Type deve ser application/json.", 415)
+        if request.headers.get("X-Requested-With") != "fetch":
+            return _erro("Requisição não permitida.", 403)
+    return None
+
+
+@app.after_request
+def _headers_seguranca(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "same-origin")
+    resp.headers.setdefault(
+        "Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'self'"
+    )
+    return resp
+
+
 @app.route("/")
 def index():
     with _lock:
@@ -195,9 +225,9 @@ def api_estado():
 
 @app.route("/api/pacientes", methods=["POST"])
 def api_criar_paciente():
-    dados = request.get_json(silent=True) or {}
-    nome = str(dados.get("nome", "")).strip()
-    queixa = str(dados.get("queixa", "")).strip()
+    dados = _json_body()
+    nome = str(dados.get("nome", "")).strip()[:120]
+    queixa = str(dados.get("queixa", "")).strip()[:500]
     sexo = str(dados.get("sexo", "")).strip().upper()
     try:
         idade = int(dados.get("idade"))
@@ -216,14 +246,16 @@ def api_criar_paciente():
     if sexo not in ("M", "F"):
         return _erro("Sexo deve ser M ou F.")
 
-    sinais_in = dados.get("sinais") or {}
+    sinais_in = dados.get("sinais")
+    if not isinstance(sinais_in, dict):
+        sinais_in = {}
     sinais = {}
     for chave, conv in (("pa", str), ("fc", int), ("temp", float), ("spo2", int)):
         valor = sinais_in.get(chave)
         if valor in (None, ""):
             continue
         try:
-            sinais[chave] = conv(valor).strip() if conv is str else conv(valor)
+            sinais[chave] = conv(valor).strip()[:10] if conv is str else conv(valor)
         except (TypeError, ValueError):
             return _erro(f"Valor inválido para o sinal vital '{chave}'.")
 
@@ -238,7 +270,7 @@ def api_criar_paciente():
             "nivel": nivel,
             "queixa": queixa,
             "sinais": sinais,
-            "observacoes": str(dados.get("observacoes", "")).strip(),
+            "observacoes": str(dados.get("observacoes", "")).strip()[:2000],
             "chegada_dt": datetime.now(),
             "senha": _gerar_senha(nome, pid),
         }
@@ -259,7 +291,7 @@ def api_paciente(pid):
 @app.route("/api/pacientes/<pid>", methods=["PATCH"])
 def api_atualizar_paciente(pid):
     """Reclassifica o nível de urgência de um paciente que está na fila."""
-    dados = request.get_json(silent=True) or {}
+    dados = _json_body()
     try:
         nivel = int(dados.get("nivel"))
     except (TypeError, ValueError):
@@ -286,8 +318,10 @@ def api_remover_paciente(pid):
 @app.route("/api/chamar", methods=["POST"])
 def api_chamar():
     """Chama o próximo da fila ou, se `id` for enviado, um paciente específico."""
-    dados = request.get_json(silent=True) or {}
+    dados = _json_body()
     consultorio = str(dados.get("consultorio") or CONSULTORIOS[0])
+    if consultorio not in CONSULTORIOS:
+        return _erro("Consultório inválido.")
     pid = dados.get("id")
 
     with _lock:
@@ -338,7 +372,7 @@ def api_chamar():
 @app.route("/api/rechamar", methods=["POST"])
 def api_rechamar():
     """Repete o aviso de uma chamada (padrão: a mais recente)."""
-    dados = request.get_json(silent=True) or {}
+    dados = _json_body()
     seq = dados.get("seq")
 
     with _lock:
@@ -375,7 +409,7 @@ def _aplicar_prontuario(atendimento, dados):
 @app.route("/api/atendimentos/<int:seq>", methods=["PATCH"])
 def api_salvar_atendimento(seq):
     """Salvamento automático do prontuário enquanto o médico digita."""
-    dados = request.get_json(silent=True) or {}
+    dados = _json_body()
     with _lock:
         atendimento = _achar_atendimento(seq)
         if atendimento is None:
@@ -387,7 +421,7 @@ def api_salvar_atendimento(seq):
 
 @app.route("/api/atendimentos/<int:seq>/encerrar", methods=["POST"])
 def api_encerrar_atendimento(seq):
-    dados = request.get_json(silent=True) or {}
+    dados = _json_body()
     with _lock:
         atendimento = _achar_atendimento(seq)
         if atendimento is None:
@@ -417,6 +451,8 @@ def api_encerrar_atendimento(seq):
 
 @app.route("/api/resetar", methods=["POST"])
 def api_resetar():
+    if os.environ.get("SIGAE_PERMITIR_RESET", "1") != "1":
+        return _erro("Reset desabilitado neste ambiente.", 403)
     with _lock:
         seq = db["evento_seq"]
         db.clear()
@@ -426,4 +462,4 @@ def api_resetar():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="127.0.0.1", port=5000)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1", host="127.0.0.1", port=5000)
