@@ -22,3 +22,20 @@ class ArvoreRubroNegra:
         self.NULO.pai = self.NULO
         self.raiz = self.NULO
 
+    def rotacionar_esquerda(self, x):
+        y = x.direita
+        if y == self.NULO:
+            return
+        x.direita = y.esquerda
+        if y.esquerda != self.NULO:
+            y.esquerda.pai = x
+        y.pai = x.pai
+        if x.pai == self.NULO:
+            self.raiz = y
+        elif x == x.pai.esquerda:
+            x.pai.esquerda = y
+        else:
+            x.pai.direita = y
+        y.esquerda = x
+        x.pai = y
+
