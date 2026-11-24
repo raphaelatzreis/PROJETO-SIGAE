@@ -36,6 +36,15 @@ class TabelaHash:
         self.total_pacientes = 0
         self.total_colisoes = 0
 
+    def resumo(self) -> dict:
+        return {
+            "capacidade": self.capacidade,
+            "total_pacientes": self.total_pacientes,
+            "ocupacao": self.ocupacao(),
+            "total_colisoes": self.total_colisoes,
+            "integra": self.validar(),
+        }
+
     def _redimensionar(self) -> None:
         registros_atuais = [
             par for bucket in self.tabela for par in bucket
