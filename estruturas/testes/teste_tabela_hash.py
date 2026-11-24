@@ -100,8 +100,8 @@ class TestTabelaHash(unittest.TestCase):
             self.assertTrue(tabela.existe(pid))
             self.assertEqual(tabela.buscar(pid)["nome"], f"Paciente {pid} Reinserido")
 
-            self.assertEqual(tabela.quantidade(), len(ids_colisao))
-            self.assertTrue(tabela.validar())
+        self.assertEqual(tabela.quantidade(), len(ids_colisao))
+        self.assertTrue(tabela.validar())
 
     def test_estresse_insercao_e_multiplos_rehashes(self):
         tabela = TabelaHash(capacidade=8)
