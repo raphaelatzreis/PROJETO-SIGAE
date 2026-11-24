@@ -155,3 +155,39 @@ class TestTabelaHash(unittest.TestCase):
         self.assertEqual(len(tabela.listar_pacientes()), len(ativos))
         self.assertTrue(tabela.resumo()["integra"])
 
+    def test_estresse_colisao_extrema_no_mesmo_bucket_e_redistribuicao(self):
+        capacidade_inicial = 16
+        tabela = TabelaHash(capacidade=capacidade_inicial)
+
+        ids_mesmo_bucket = [capacidade_inicial * k + 5 for k in range(1, 13)]
+
+        for pid in ids_mesmo_bucket:
+            tabela.inserir(pid, {"nome": f"Paciente Colisao {pid}", "prioridade": "alta"})
+
+        self.assertEqual(tabela.capacidade, capacidade_inicial)
+        self.assertEqual(tabela.quantidade(), 12)
+        self.assertEqual(tabela.total_colisoes, 11)
+        self.assertEqual(len(tabela.inspecionar_bucket(5)), 12)
+        self.assertTrue(tabela.validar())
+
+        tabela.inserir(99998, {"nome": "Pre Rehash", "prioridade": "media"})
+        self.assertEqual(tabela.capacidade, capacidade_inicial)
+        self.assertEqual(tabela.quantidade(), 13)
+
+        tabela.inserir(99999, {"nome": "Gatilho Rehash", "prioridade": "emergencia"})
+        self.assertEqual(tabela.capacidade, 32)
+        self.assertEqual(tabela.quantidade(), 14)
+        self.assertTrue(tabela.validar())
+
+        for pid in ids_mesmo_bucket:
+            paciente = tabela.buscar(pid)
+            self.assertIsNotNone(paciente)
+            self.assertEqual(paciente["nome"], f"Paciente Colisao {pid}")
+
+        for pid in ids_mesmo_bucket + [99998, 99999]:
+            self.assertTrue(tabela.remover(pid))
+
+        self.assertTrue(tabela.esta_vazia())
+        self.assertEqual(tabela.ocupacao_percentual(), 0.0)
+        self.assertTrue(tabela.validar())
+
