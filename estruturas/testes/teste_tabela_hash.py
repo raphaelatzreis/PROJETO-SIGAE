@@ -54,3 +54,30 @@ class TestTabelaHash(unittest.TestCase):
         self.assertEqual(tabela.ocupacao_percentual(), 62.5)
         self.assertTrue(tabela.validar())
         self.assertTrue(tabela.resumo()["integra"])
+
+    def test_entradas_invalidas_e_casos_de_borda(self):
+        with self.assertRaises(ValueError):
+            TabelaHash(capacidade=0)
+
+        with self.assertRaises(ValueError):
+            TabelaHash(capacidade=-5)
+
+        tabela = TabelaHash(capacidade=7)
+        self.assertFalse(tabela.remover(1))
+        self.assertIsNone(tabela.buscar(1))
+
+        with self.assertRaises(ValueError):
+            tabela.inserir(0, {"nome": "Inválido"})
+
+        with self.assertRaises(ValueError):
+            tabela.inserir(-2, {"nome": "Inválido"})
+
+        with self.assertRaises(ValueError):
+            tabela.inserir(True, {"nome": "Bool não é ID"})
+
+        with self.assertRaises(ValueError):
+            tabela.inserir(1, None)
+
+        self.assertTrue(tabela.validar())
+
+
