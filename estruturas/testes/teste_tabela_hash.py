@@ -118,4 +118,40 @@ class TestTabelaHash(unittest.TestCase):
         for i in range(1, total + 1):
             self.assertEqual(tabela.buscar(i)["nome"], f"Paciente {i}")
 
+    def test_estresse_operacoes_mistas_em_ondas(self):
+        tabela = TabelaHash(capacidade=7)
+        ativos = {}
+
+        for onda in range(5):
+            inicio = onda * 400 + 1
+            fim = inicio + 400
+
+            for pid in range(inicio, fim):
+                dados = {"nome": f"Paciente {pid}", "prioridade": "media", "onda": onda}
+                tabela.inserir(pid, dados)
+                ativos[pid] = dados
+
+            for pid in range(inicio, fim):
+                if pid % 2 == 0:
+                    novos_dados = {"nome": f"Paciente {pid} Atualizado", "prioridade": "emergencia", "onda": onda}
+                    tabela.inserir(pid, novos_dados)
+                    ativos[pid] = novos_dados
+
+            for pid in range(inicio, fim):
+                if pid % 3 == 0:
+                    self.assertTrue(tabela.remover(pid))
+                    ativos.pop(pid)
+                    self.assertFalse(tabela.remover(pid))
+
+            self.assertEqual(tabela.quantidade(), len(ativos))
+            self.assertTrue(tabela.validar())
+
+        for pid, esperado in ativos.items():
+            encontrado = tabela.buscar(pid)
+            self.assertIsNotNone(encontrado)
+            self.assertEqual(encontrado["nome"], esperado["nome"])
+            self.assertEqual(encontrado["prioridade"], esperado["prioridade"])
+
+        self.assertEqual(len(tabela.listar_pacientes()), len(ativos))
+        self.assertTrue(tabela.resumo()["integra"])
 
