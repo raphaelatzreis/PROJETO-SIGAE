@@ -80,4 +80,27 @@ class TestTabelaHash(unittest.TestCase):
 
         self.assertTrue(tabela.validar())
 
+    def test_estresse_colisoes_e_remocao_reinsercao(self):
+        tabela = TabelaHash(capacidade=10)
+        ids_colisao = [10 * k + 3 for k in range(1, 7)]
+
+        for pid in ids_colisao:
+            tabela.inserir(pid, {"nome": f"Paciente {pid}", "prioridade": "alta", "horario": "09:00"})
+
+        self.assertEqual(tabela.quantidade(), len(ids_colisao))
+        self.assertGreater(tabela.total_colisoes, 0)
+        self.assertTrue(tabela.validar())
+
+        for pid in ids_colisao[::2]:
+            self.assertTrue(tabela.remover(pid))
+            self.assertFalse(tabela.existe(pid))
+
+        for pid in ids_colisao[::2]:
+            tabela.inserir(pid, {"nome": f"Paciente {pid} Reinserido", "prioridade": "emergencia", "horario": "09:30"})
+            self.assertTrue(tabela.existe(pid))
+            self.assertEqual(tabela.buscar(pid)["nome"], f"Paciente {pid} Reinserido")
+
+            self.assertEqual(tabela.quantidade(), len(ids_colisao))
+            self.assertTrue(tabela.validar())
+
 
