@@ -45,6 +45,13 @@ class TabelaHash:
             "integra": self.validar(),
         }
 
+    def ocupacao_percentual(self) -> float:
+        return round(self.ocupacao() * 100, 2)
+
+    def inspecionar_bucket(self, id_paciente: int) -> list:
+        indice = self._calcular_indice(id_paciente)
+        return list(self.tabela[indice])
+
     def _redimensionar(self) -> None:
         registros_atuais = [
             par for bucket in self.tabela for par in bucket
