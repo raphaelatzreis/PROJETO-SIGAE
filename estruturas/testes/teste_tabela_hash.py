@@ -103,4 +103,19 @@ class TestTabelaHash(unittest.TestCase):
             self.assertEqual(tabela.quantidade(), len(ids_colisao))
             self.assertTrue(tabela.validar())
 
+    def test_estresse_insercao_e_multiplos_rehashes(self):
+        tabela = TabelaHash(capacidade=8)
+        total = 2000
+
+        for i in range(1, total + 1):
+            tabela.inserir(i, {"nome": f"Paciente {i}", "prioridade": "media", "horario": "08:00"})
+
+        self.assertEqual(tabela.quantidade(), total)
+        self.assertGreater(tabela.capacidade, 8)
+        self.assertLessEqual(tabela.ocupacao(), tabela.FATOR_CARGA_MAXIMO + 0.5)
+        self.assertTrue(tabela.validar())
+
+        for i in range(1, total + 1):
+            self.assertEqual(tabela.buscar(i)["nome"], f"Paciente {i}")
+
 
