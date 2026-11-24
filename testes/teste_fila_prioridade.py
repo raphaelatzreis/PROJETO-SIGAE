@@ -154,4 +154,63 @@ assert fila_medicos.esta_vazia()
 assert fila_medicos.remover_minimo() is None
 print("Teste 17 ok: todos os médicos ocupados, a chamada do próximo fica bloqueada (nenhum disponível)")
 
+valida, mensagem = fila.validar()
+assert valida, mensagem
+valida_medicos, mensagem_medicos = fila_medicos.validar()
+assert valida_medicos, mensagem_medicos
+print(f"Teste 18 ok: depois de todas as operações, as duas filas passaram na validação. "
+    f"Pacientes: {mensagem}")
+
+
+print()
+print("=== Teste da validação (filas corrompidas de propósito) ===")
+
+fila_quebrada = FilaPrioridade(paciente_vem_antes)
+fila_quebrada.inserir(PacienteTeste(201, "Ana", 2, "09:00"))
+fila_quebrada.inserir(PacienteTeste(202, "Beto", 4, "09:05"))
+fila_quebrada.inserir(PacienteTeste(203, "Caio", 5, "09:10"))
+fila_quebrada.fila[0], fila_quebrada.fila[2] = fila_quebrada.fila[2], fila_quebrada.fila[0]
+valida, mensagem = fila_quebrada.validar()
+assert not valida
+print(f"Teste 19 ok: trocamos duas pessoas de lugar por fora da fila e a validação percebeu. {mensagem}")
+
+fila_quebrada = FilaPrioridade(paciente_vem_antes)
+fila_quebrada.inserir(PacienteTeste(201, "Ana", 2, "09:00"))
+fila_quebrada.inserir(PacienteTeste(202, "Beto", 4, "09:05"))
+fila_quebrada.posicoes[202] = 0
+valida, mensagem = fila_quebrada.validar()
+assert not valida
+print(f"Teste 20 ok: estragamos o mapa de posições e a validação percebeu. {mensagem}")
+
+fila_quebrada = FilaPrioridade(paciente_vem_antes)
+fila_quebrada.inserir(PacienteTeste(201, "Ana", 2, "09:00"))
+fila_quebrada.posicoes.append(None)
+fila_quebrada.posicoes.append(5)
+valida, mensagem = fila_quebrada.validar()
+assert not valida
+print(f"Teste 21 ok: deixamos um id fantasma no mapa e a validação percebeu. {mensagem}")
+
+print()
+print("=== Teste da fila de espera (listar_ordenado) ===")
+
+posicoes_antes_de_listar = fila.posicoes[:]
+fila_de_espera = fila.listar_ordenado()
+nomes_em_ordem = []
+for paciente in fila_de_espera:
+    nomes_em_ordem.append(paciente.nome)
+assert nomes_em_ordem == ["Brenno", "Raphaela", "Marcos"]
+print(f"Teste 22 ok: fila de espera na ordem de atendimento: {nomes_em_ordem} "
+    f"(Brenno e Raphaela têm prioridade 3 e Brenno chegou antes; Marcos tem prioridade 5)")
+
+assert fila.tamanho() == 3
+assert fila.ver_proximo().nome == "Brenno"
+assert fila.posicoes == posicoes_antes_de_listar
+valida, mensagem = fila.validar()
+assert valida, mensagem
+print(f"Teste 23 ok: depois de listar, a fila original continua intacta. {mensagem}")
+
+fila_vazia = FilaPrioridade(paciente_vem_antes)
+assert fila_vazia.listar_ordenado() == []
+print("Teste 24 ok: com o pronto-socorro vazio, a fila de espera aparece vazia")
+
 print("=== Todos os testes passaram ===")
