@@ -124,7 +124,7 @@ class FilaPrioridade:
             self.descer(0)
 
         return pessoa_mais_urgente
-    
+
     def alterar_prioridade(self, id_pessoa):
         posicao_atual = self._buscar_posicao(id_pessoa)
         if posicao_atual is None:
@@ -138,29 +138,80 @@ class FilaPrioridade:
         self.descer(posicao_depois_de_subir)
 
         return pessoa_reclassificada
-    
+
     def remover(self, id_pessoa):
-            posicao_de_quem_sai = self._buscar_posicao(id_pessoa)
-            if posicao_de_quem_sai is None:
-                raise ValueError(f"O id {id_pessoa} não está na fila.")
+        posicao_de_quem_sai = self._buscar_posicao(id_pessoa)
+        if posicao_de_quem_sai is None:
+            raise ValueError(f"O id {id_pessoa} não está na fila.")
 
-            pessoa_removida = self.fila[posicao_de_quem_sai]
-            posicao_da_ultima_pessoa = len(self.fila) - 1
+        pessoa_removida = self.fila[posicao_de_quem_sai]
+        posicao_da_ultima_pessoa = len(self.fila) - 1
 
-            self._trocar(posicao_de_quem_sai, posicao_da_ultima_pessoa)
-            self.fila.pop()
-            self._apagar_posicao(pessoa_removida.id)
+        self._trocar(posicao_de_quem_sai, posicao_da_ultima_pessoa)
+        self.fila.pop()
+        self._apagar_posicao(pessoa_removida.id)
 
-            if posicao_de_quem_sai < len(self.fila):
-                pessoa_que_ocupou_o_lugar = self.fila[posicao_de_quem_sai]
-                self.subir(posicao_de_quem_sai)
-                posicao_depois_de_subir = self._buscar_posicao(pessoa_que_ocupou_o_lugar.id)
-                self.descer(posicao_depois_de_subir)
+        if posicao_de_quem_sai < len(self.fila):
+            pessoa_que_ocupou_o_lugar = self.fila[posicao_de_quem_sai]
+            self.subir(posicao_de_quem_sai)
+            posicao_depois_de_subir = self._buscar_posicao(pessoa_que_ocupou_o_lugar.id)
+            self.descer(posicao_depois_de_subir)
 
-            return pessoa_removida
-        
+        return pessoa_removida
 
-    # ---------- regras de comparacao SIGAE ----------
+    def listar_ordenado(self):
+        copia_da_fila = FilaPrioridade(self.vem_antes)
+        copia_da_fila.fila = self.fila[:]
+        copia_da_fila.posicoes = self.posicoes[:]
+
+        pessoas_em_ordem = []
+        while not copia_da_fila.esta_vazia():
+            pessoas_em_ordem.append(copia_da_fila.remover_minimo())
+
+        return pessoas_em_ordem
+
+    # ---------- verificacao de integridade ----------
+
+    def validar(self):
+        quantidade_na_fila = len(self.fila)
+
+        for posicao_atual in range(1, quantidade_na_fila):
+            posicao_de_quem_esta_acima = self._posicao_acima(posicao_atual)
+            pessoa_atual = self.fila[posicao_atual]
+            pessoa_acima = self.fila[posicao_de_quem_esta_acima]
+
+            if self.vem_antes(pessoa_atual, pessoa_acima):
+                return False, (
+                    f"Ordem quebrada: o id {pessoa_atual.id} (posição {posicao_atual}) "
+                    f"deveria estar acima do id {pessoa_acima.id} "
+                    f"(posição {posicao_de_quem_esta_acima})."
+                )
+
+        for posicao_atual in range(quantidade_na_fila):
+            pessoa_atual = self.fila[posicao_atual]
+            posicao_no_mapa = self._buscar_posicao(pessoa_atual.id)
+
+            if posicao_no_mapa != posicao_atual:
+                return False, (
+                    f"Mapa de posições errado: o id {pessoa_atual.id} está na posição "
+                    f"{posicao_atual}, mas o mapa indica {posicao_no_mapa}."
+                )
+
+        quantidade_no_mapa = 0
+        for posicao_guardada in self.posicoes:
+            if posicao_guardada is not None:
+                quantidade_no_mapa = quantidade_no_mapa + 1
+
+        if quantidade_no_mapa != quantidade_na_fila:
+            return False, (
+                f"Mapa de posições com sobra: o mapa guarda {quantidade_no_mapa} ids, "
+                f"mas a fila tem {quantidade_na_fila}."
+            )
+
+        return True, f"Fila íntegra: ordem e mapa de posições corretos ({quantidade_na_fila} na fila)."
+
+
+# ---------- regras de comparacao SIGAE ----------
 
 def paciente_vem_antes(paciente_avaliado, paciente_comparado):
     if paciente_avaliado.prioridade != paciente_comparado.prioridade:
