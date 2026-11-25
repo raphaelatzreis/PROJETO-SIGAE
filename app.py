@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import os
 from threading import Lock
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 from servico.servico_atendimento import ServicoAtendimento
 
@@ -170,8 +170,8 @@ def _altura(no):
     return 0 if no is None else 1 + max(_altura(no["esq"]), _altura(no["dir"]))
 
 
-def _resumo_estruturas():
-    servico = db["servico"]
+def _resumo_estruturas(servico=None):
+    servico = servico or db["servico"]
     tabela = servico.tabela_hash
     arvore = _arvore_para_dict(servico.arvore, servico.arvore.raiz)
     return {
@@ -276,6 +276,12 @@ def index():
     with _lock:
         estado = _obter_estado()
     return render_template("index.html", estado=estado, niveis=NIVEIS_EMERGENCIA)
+
+
+@app.route("/estruturas")
+def estruturas():
+    """Acesso direto à seção Estruturas, que não aparece no menu."""
+    return redirect(url_for("index") + "#/estruturas")
 
 
 @app.route("/painel")
@@ -603,6 +609,209 @@ def api_cadastrar_medico():
         except ValueError as exc:
             return _erro(str(exc))
         return jsonify(_obter_estado()), 201
+
+
+# ---------------------------------------------------------------------------
+# Demonstrações dos testes ao vivo (A, B e C)
+# Cada uma roda num ServicoAtendimento novo, só para a demonstração: usa as
+# estruturas da equipe sem mexer na fila real que está sendo operada.
+# ---------------------------------------------------------------------------
+def _demo_paciente(servico, pid, nome, nivel, horario):
+    servico.proximo_id_paciente = pid
+    return servico.cadastrar_paciente(nome, 40, "M", nivel, "Paciente de demonstração", horario)
+
+
+def _quadro_hash(servico, titulo, destaque=(), alvo=None):
+    tabela = servico.tabela_hash
+    return {
+        "tipo": "hash",
+        "titulo": titulo,
+        "capacidade": tabela.capacidade,
+        "buckets": [[f"PAC-{par[0]}" for par in bucket] for bucket in tabela.tabela],
+        "destaque": [f"PAC-{pid}" for pid in destaque],
+        "alvo": alvo,
+    }
+
+
+def _quadro_heap_pacientes(servico, titulo, alvo=None, mudanca=None):
+    """`alvo` é o ID do paciente alterado no passo; `mudanca` descreve a alteração (ex.: "P2 → P1")."""
+    return {
+        "tipo": "heap_pacientes",
+        "titulo": titulo,
+        "itens": [{"id": p.id_publico, "nome": p.nome, "nivel": p.prioridade} for p in servico.fila_pacientes.fila],
+        "alvo": f"PAC-{alvo}" if alvo else None,
+        "mudanca": mudanca,
+    }
+
+
+def _quadro_heap_medicos(servico, titulo, alvo=None, mudanca=None):
+    return {
+        "tipo": "heap_medicos",
+        "titulo": titulo,
+        "itens": [{"id": m.id, "nome": m.nome, "concluidos": m.atendimentos} for m in servico.fila_medicos.fila],
+        "alvo": alvo,
+        "mudanca": mudanca,
+    }
+
+
+def _demo_colisao():
+    servico = ServicoAtendimento()
+    hoje = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    cap = servico.tabela_hash.capacidade
+    passos = []
+
+    _demo_paciente(servico, 101, "Paciente Cento e Um", 3, hoje)
+    passos.append({
+        "texto": f"Cadastra PAC-101: h(101) = 101 % {cap} = {101 % cap}.",
+        "detalhe": f"O bucket {101 % cap} estava vazio, então o PAC-101 entra sozinho.",
+        "quadro": _quadro_hash(servico, "Tabela Hash", (101,), 101 % cap),
+    })
+    _demo_paciente(servico, 112, "Paciente Cento e Doze", 3, hoje + timedelta(minutes=1))
+    passos.append({
+        "texto": f"Cadastra PAC-112: h(112) = 112 % {cap} = {112 % cap}. Mesmo bucket do PAC-101: colisão.",
+        "detalhe": f"Encadeamento separado: o bucket {112 % cap} passa a guardar os dois. "
+                   f"Colisões registradas: {servico.tabela_hash.total_colisoes}.",
+        "quadro": _quadro_hash(servico, "Tabela Hash com a colisão", (101, 112), 112 % cap),
+    })
+    for pid in (101, 112):
+        achado = servico.buscar_paciente(pid)
+        bucket = [f"PAC-{par[0]}" for par in servico.tabela_hash.inspecionar_bucket(pid)]
+        passos.append({
+            "texto": f"Localiza PAC-{pid} pela Hash.",
+            "detalhe": f"Calcula {pid} % {cap} = {pid % cap}, vai direto ao bucket {pid % cap} "
+                       f"({', '.join(bucket)}), percorre a lista e encontra \"{achado.nome}\".",
+            "quadro": _quadro_hash(servico, f"Busca do PAC-{pid}", (pid,), pid % cap),
+        })
+
+    pid = 102
+    while servico.tabela_hash.capacidade == cap:
+        _demo_paciente(servico, pid, f"Paciente {pid}", 5, hoje + timedelta(minutes=pid - 100))
+        pid += 1
+    nova = servico.tabela_hash.capacidade
+    juntos = 101 % nova == 112 % nova
+    passos.append({
+        "texto": f"Cadastra mais pacientes até a ocupação passar de 75%: a tabela dobra de {cap} para {nova} "
+                 f"buckets e redistribui todos.",
+        "detalhe": f"Com a nova capacidade, 101 % {nova} = {101 % nova} e 112 % {nova} = {112 % nova}: "
+                   + ("os dois continuam juntos." if juntos else "os dois ficam em buckets diferentes."),
+        "quadro": _quadro_hash(servico, "Depois do redimensionamento", (101, 112)),
+    })
+    for pid in (101, 112):
+        achado = servico.buscar_paciente(pid)
+        passos.append({
+            "texto": f"Localiza PAC-{pid} de novo, na tabela redimensionada.",
+            "detalhe": (f"Calcula {pid} % {nova} = {pid % nova} e encontra \"{achado.nome}\" no bucket {pid % nova}."
+                        if achado else f"PAC-{pid} não encontrado!"),
+            "quadro": _quadro_hash(servico, f"Busca do PAC-{pid}", (pid,), pid % nova),
+        })
+    return {"titulo": "Teste A · Colisão na Tabela Hash", "passos": passos,
+            "integra": servico.validar_integridade()}
+
+
+def _demo_prioridade():
+    servico = ServicoAtendimento()
+    hoje = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    for i, (nivel, nome) in enumerate(((2, "Ana"), (3, "Bruno"), (1, "Carla"), (4, "Diego"), (5, "Elisa"))):
+        _demo_paciente(servico, 201 + i, nome, nivel, hoje + timedelta(minutes=5 * i))
+
+    def raiz():
+        p = servico.fila_pacientes.ver_proximo()
+        return f"{p.id_publico} ({p.nome}, nível {p.prioridade}, chegou {p.horario:%H:%M})"
+
+    passos = [{
+        "texto": "Cadastra 5 pacientes: Ana (nível 2, 08:00), Bruno (3, 08:05), Carla (1, 08:10), "
+                 "Diego (4, 08:15) e Elisa (5, 08:20).",
+        "detalhe": "Raiz do Min-Heap: " + raiz() + ", a única com nível 1.",
+        "quadro": _quadro_heap_pacientes(servico, "Heap inicial"),
+    }]
+    servico.reclassificar_paciente(201, 1)
+    passos.append({
+        "texto": "Reclassifica Ana (PAC-201) de nível 2 para 1.",
+        "detalhe": "Empata com Carla no nível 1, mas chegou antes (08:00 × 08:10), então vira a raiz.",
+        "quadro": _quadro_heap_pacientes(servico, "Depois de reclassificar Ana", 201, "P2 → P1"),
+    })
+    servico.reclassificar_paciente(205, 1)
+    passos.append({
+        "texto": "Reclassifica Elisa (PAC-205) de nível 5 para 1.",
+        "detalhe": "Elisa sobe, mas não passa da Ana: mesmo nível, e a Ana chegou antes (08:00 × 08:20).",
+        "quadro": _quadro_heap_pacientes(servico, "Depois de reclassificar Elisa", 205, "P5 → P1"),
+    })
+    servico.reclassificar_paciente(201, 4)
+    passos.append({
+        "texto": "Reclassifica Ana de volta, agora para nível 4.",
+        "detalhe": "Ana desce, e a Carla, que chegou antes da Elisa, volta para a raiz.",
+        "quadro": _quadro_heap_pacientes(servico, "Depois de rebaixar Ana", 201, "P1 → P4"),
+    })
+    return {"titulo": "Teste B · Prioridade no Min-Heap de pacientes", "passos": passos,
+            "integra": servico.validar_integridade()}
+
+
+def _demo_medicos():
+    servico = ServicoAtendimento()
+    hoje = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    for nome, carga in (("Dr. André", 3), ("Dra. Beatriz", 1), ("Dr. Caio", 1)):
+        servico.cadastrar_medico(nome, atendimentos=carga)
+    for i in range(6):
+        _demo_paciente(servico, 301 + i, f"Paciente {i + 1}", 3, hoje + timedelta(minutes=i))
+
+    def heap(titulo, alvo=None, mudanca=None):
+        return _quadro_heap_medicos(servico, titulo, alvo, mudanca)
+
+    passos = [{
+        "texto": "Cadastra 3 clínicos com cargas diferentes: Dr. André (3 atendimentos), "
+                 "Dra. Beatriz (1) e Dr. Caio (1), nessa ordem.",
+        "detalhe": "Raiz do Min-Heap de médicos: Dra. Beatriz. Empata com Dr. Caio em 1, mas foi cadastrada antes.",
+        "quadro": heap("Heap de médicos inicial"),
+    }]
+
+    def chamar(extra=None):
+        r = servico.chamar_proximo()
+        m = r["medico"]
+        crit = _criterio_medico(m, servico.fila_medicos.ver_proximo())["texto"]
+        passos.append({
+            "texto": f"Chama {r['paciente'].id_publico}: designado {m.nome} (#{m.id}).",
+            "detalhe": crit + (" " + extra if extra else "") + " Enquanto atende, sai do heap de disponíveis.",
+            "quadro": heap(f"{m.nome} em atendimento", m.id, "saiu do heap (foi atender)"),
+        })
+        return m
+
+    def finalizar(m):
+        servico.finalizar_atendimento(m.id)
+        passos.append({
+            "texto": f"{m.nome} conclui o atendimento.",
+            "detalhe": f"O contador passa para {m.atendimentos} e {m.nome} volta ao heap de disponíveis.",
+            "quadro": heap(f"{m.nome} volta com {m.atendimentos}", m.id,
+                           f"{m.atendimentos - 1} → {m.atendimentos} at."),
+        })
+
+    finalizar(chamar())
+    finalizar(chamar())
+    chamar()
+    chamar()
+    chamar("Dr. André só é chamado agora, porque era quem tinha mais atendimentos.")
+    try:
+        servico.chamar_proximo()
+        passos.append({"texto": "Erro: a chamada deveria ter sido bloqueada."})
+    except ValueError as exc:
+        passos.append({
+            "texto": "Nova chamada com os três médicos ocupados.",
+            "detalhe": f"O heap de médicos está vazio, então a chamada fica bloqueada (\"{exc}\").",
+            "quadro": heap("Heap de médicos vazio"),
+        })
+    return {"titulo": "Teste C · Balanceamento dos médicos", "passos": passos,
+            "integra": servico.validar_integridade()}
+
+
+_DEMONSTRACOES = {"a": _demo_colisao, "b": _demo_prioridade, "c": _demo_medicos}
+
+
+@app.route("/api/demonstracao/<teste>", methods=["GET"])
+def api_demonstracao(teste):
+    """Roda o teste ao vivo pedido num serviço separado e devolve o passo a passo."""
+    demo = _DEMONSTRACOES.get(teste.lower())
+    if demo is None:
+        return _erro("Teste inexistente. Use A, B ou C.", 404)
+    return jsonify(demo())
 
 
 @app.route("/api/resetar", methods=["POST"])

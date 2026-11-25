@@ -32,7 +32,7 @@ button { font: inherit; color: inherit; }
 
 /* Topo */
 .tv-top { display: flex; align-items: center; justify-content: space-between; }
-.tv-brand { font-size: clamp(18px, 1.6vw, 30px); font-weight: 700; letter-spacing: 0.06em; }
+.tv-brand { font-size: clamp(18px, 1.6vw, 30px); font-weight: 700; letter-spacing: 0.06em; color: inherit; text-decoration: none; }
 .tv-clock {
   font-size: clamp(24px, 2.4vw, 44px); font-weight: 600;
   font-variant-numeric: tabular-nums; color: var(--text-2);

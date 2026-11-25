@@ -50,7 +50,7 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v5a4 4 0 0 0 8 0V3"/><path d="M12 12v3a5 5 0 0 0 10 0v-2"/><circle cx="22" cy="11" r="1.5"/></svg>
           <span>Equipe médica</span>
         </a>
-        <a href="#/estruturas" class="nav-item" data-route="estruturas">
+        <a href="#/estruturas" class="nav-item" data-route="estruturas" id="nav-estruturas" hidden>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M10.8 7.2 6.2 16.8M13.2 7.2l4.6 9.6"/></svg>
           <span>Estruturas</span>
         </a>
@@ -273,15 +273,26 @@
 
           <div class="card est-card">
             <div class="card-head">
-              <h2>Atendimentos em andamento <span class="card-count">quem atende quem, e por quê</span></h2>
+              <h2>Testes ao vivo</h2>
             </div>
-            <p class="muted">Ao chamar, o sistema retira a raiz dos dois Min-Heaps: o paciente mais urgente e o médico disponível com menos atendimentos concluídos.</p>
+            <div class="demo-botoes" id="demo-botoes">
+              <button type="button" class="btn btn-ghost" data-teste="a">Teste A · Colisão</button>
+              <button type="button" class="btn btn-ghost" data-teste="b">Teste B · Prioridade</button>
+              <button type="button" class="btn btn-ghost" data-teste="c">Teste C · Médicos</button>
+            </div>
+            <div class="demo-resultado" id="demo-resultado" hidden></div>
+          </div>
+
+          <div class="card est-card">
+            <div class="card-head">
+              <h2>Atendimentos em andamento</h2>
+            </div>
             <div class="vinculos" id="vinculos"></div>
           </div>
 
           <div class="card est-card">
             <div class="card-head">
-              <h2>Tabela Hash <span class="card-count">localização por ID</span></h2>
+              <h2>Tabela Hash</h2>
             </div>
             <p class="muted" id="hash-resumo"></p>
             <form id="hash-busca" class="est-busca" autocomplete="off">
@@ -295,26 +306,25 @@
           <div class="est-grid">
             <div class="card est-card">
               <div class="card-head">
-                <h2>Árvore Rubro-Negra <span class="card-count">ordem de chegada · chave (horário, ID)</span></h2>
+                <h2>Árvore Rubro-Negra</h2>
               </div>
               <p class="muted" id="rb-resumo"></p>
               <div class="est-svg" id="rb-svg"></div>
-              <div class="est-legenda"><span><i class="est-dot rb-vermelho"></i>Vermelho</span><span><i class="est-dot rb-preto"></i>Preto</span><span>Percurso em ordem = ordem de chegada</span></div>
+              <div class="est-legenda"><span><i class="est-dot rb-vermelho"></i>Vermelho</span><span><i class="est-dot rb-preto"></i>Preto</span></div>
             </div>
 
             <div class="card est-card">
               <div class="card-head">
-                <h2>Min-Heap de pacientes <span class="card-count">raiz = próximo a ser chamado</span></h2>
+                <h2>Min-Heap de pacientes</h2>
               </div>
               <p class="muted" id="heap-resumo"></p>
               <div class="est-svg" id="heap-svg"></div>
-              <div class="est-legenda"><span>P1 = maior urgência</span><span>Empate: chegada, depois ID</span></div>
             </div>
           </div>
 
           <div class="card est-card">
             <div class="card-head">
-              <h2>Min-Heap de médicos <span class="card-count">raiz = próximo médico designado</span></h2>
+              <h2>Min-Heap de médicos</h2>
             </div>
             <p class="muted" id="heap-med-resumo"></p>
             <div class="est-svg est-svg-baixo" id="heap-med-svg"></div>
