@@ -1,0 +1,125 @@
+/* =============================================================================
+   SIGAE — Telão da sala de espera
+   ========================================================================== */
+:root {
+  --bg: #111318;
+  --surface: #181b22;
+  --border: #262a34;
+  --text: #eceef2;
+  --text-2: #a4abb8;
+  --text-3: #6f7787;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%;
+  background: var(--bg); color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+h1, h2, p { margin: 0; }
+button { font: inherit; color: inherit; }
+
+.tv {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 3vh;
+  padding: 3vh 3vw;
+}
+
+/* Topo */
+.tv-top { display: flex; align-items: center; justify-content: space-between; }
+.tv-brand { font-size: clamp(18px, 1.6vw, 30px); font-weight: 700; letter-spacing: 0.06em; }
+.tv-clock {
+  font-size: clamp(24px, 2.4vw, 44px); font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--text-2);
+}
+
+/* Principal */
+.tv-main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 4vw; min-height: 0; padding-bottom: 6vh; }
+
+.tv-current {
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+  gap: 3vh; padding: 0 2vw;
+  text-align: center;
+}
+.tv-senha {
+  font-size: clamp(80px, 15vw, 320px);
+  font-weight: 700; line-height: 0.95; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.tv-info { display: flex; flex-direction: column; gap: 0.6vh; }
+.tv-nome { font-size: clamp(18px, 2vw, 38px); font-weight: 500; color: var(--text-2); }
+.tv-local { font-size: clamp(18px, 2vw, 38px); font-weight: 600; color: var(--text); }
+
+.tv-idle .tv-senha { color: var(--text-3); }
+.tv-idle .tv-nome { color: var(--text-3); }
+
+/* Nova chamada: entrada discreta, sem brilho */
+.tv-current.flash .tv-senha,
+.tv-current.flash .tv-info { animation: enter 0.5s ease-out; }
+.tv-current.flash .tv-senha { animation: enter 0.5s ease-out, blink 1s step-end 0.5s 3; }
+@keyframes enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes blink { 50% { opacity: 0.25; } }
+
+/* Lateral: últimas chamadas */
+.tv-side {
+  display: flex; flex-direction: column; min-height: 0;
+  padding: 6vh 1vw 0;
+}
+.tv-side h2 {
+  font-size: clamp(13px, 1vw, 18px); font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--text-3); margin-bottom: 4vh;
+}
+.tv-history {
+  list-style: none; margin: 0 -1vw 0 0; padding: 0 1vw 0 0;
+  display: flex; flex-direction: column; gap: 4vh;
+  flex: 0 1 auto; min-height: 0; overflow-y: auto;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+.tv-history::-webkit-scrollbar { width: 8px; }
+.tv-history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+.tv-history li {
+  display: grid; grid-template-columns: 1fr auto; column-gap: 16px; row-gap: 0.4vh;
+}
+.th-name { font-size: clamp(16px, 1.4vw, 26px); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.th-place { color: var(--text-2); font-size: clamp(13px, 1.05vw, 20px); }
+.th-time {
+  grid-column: 2; grid-row: 1 / span 2; align-self: center;
+  color: var(--text-3); font-size: clamp(14px, 1.1vw, 21px);
+  font-variant-numeric: tabular-nums;
+}
+.tv-empty { color: var(--text-3); font-size: clamp(14px, 1.1vw, 20px); padding: 1vh 0; }
+
+/* Tela de ativação de som */
+.tv-unlock {
+  position: fixed; inset: 0; z-index: 10;
+  display: grid; place-items: center;
+  background: rgba(17, 19, 24, 0.92);
+  transition: opacity 0.3s;
+}
+.tv-unlock.hide { opacity: 0; pointer-events: none; }
+.tv-unlock button {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 36px 48px; border-radius: 16px;
+  border: 1px solid var(--border); background: var(--surface);
+  cursor: pointer;
+}
+.tv-unlock button:hover { border-color: var(--text-3); }
+.tv-unlock strong { font-size: 22px; }
+.tv-unlock span { color: var(--text-3); }
+
+@media (max-width: 900px) {
+  html, body { overflow: auto; }
+  .tv { height: auto; min-height: 100vh; padding: 16px; gap: 16px; }
+  .tv-main { grid-template-columns: 1fr; gap: 16px; }
+  .tv-current { min-height: 50vh; }
+  .tv-side { max-height: 60vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
