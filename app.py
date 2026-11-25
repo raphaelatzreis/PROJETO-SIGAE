@@ -5,6 +5,8 @@ from threading import Lock
 
 from flask import Flask, jsonify, render_template, request
 
+from servico.servico_atendimento import ServicoAtendimento
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # 64 KB
 
@@ -65,47 +67,44 @@ def _gerar_senha(nome, pid):
     return f"{iniciais}-{numero:02d}"
 
 
-def _criar_dados_iniciais():
+def _criar_servico():
+    """Monta o ServicoAtendimento da equipe com os dados de teste (pacientes e médicos)."""
     agora = datetime.now()
-    pacientes = {}
+    servico = ServicoAtendimento()
     for pid, nome, idade, sexo, nivel, queixa, espera, sinais in _DADOS_BASE:
-        pacientes[pid] = {
-            "id": pid,
-            "nome": nome,
-            "idade": idade,
-            "sexo": sexo,
-            "nivel": nivel,
-            "queixa": queixa,
-            "sinais": dict(sinais),
-            "observacoes": "",
-            "chegada_dt": agora - timedelta(minutes=espera),
-            "senha": _gerar_senha(nome, pid),
-        }
-    return pacientes
+        servico.proximo_id_paciente = int(pid.split("-")[1])
+        servico.cadastrar_paciente(nome, idade, sexo, nivel, queixa, agora - timedelta(minutes=espera),
+                                   sinais=sinais, senha=_gerar_senha(nome, pid))
+    servico.proximo_id_paciente = 1049
+    for nome, concluidos in (("Dra. Ana Paula Reis", 1), ("Dr. Bruno Tavares", 3), ("Dra. Clara Monteiro", 2)):
+        servico.cadastrar_medico(nome, atendimentos=concluidos)
+    return servico
 
 
 def _estado_inicial():
     return {
-        "fila": _criar_dados_iniciais(),
+        "servico": _criar_servico(),
         "historico": [],  # chamadas, mais recente primeiro
         "atendimentos": {},  # consultório -> atendimento em andamento
         "evento_seq": 0,  # incrementa a cada chamada/rechamada (o telão usa para tocar o aviso)
         "ultimo_evento": None,
-        "proximo_id": 1049,
     }
 
 
 db = _estado_inicial()
 
 
-def _serializar_paciente(p, agora):
+def _serializar_paciente(paciente, agora):
+    """`paciente` é o servico.paciente.Paciente guardado na Hash/árvore/heap."""
+    p = paciente.to_dict()
+    p.pop("chegada_dt")
     info = NIVEIS_EMERGENCIA[p["nivel"]]
-    espera = max(0, int((agora - p["chegada_dt"]).total_seconds() // 60))
-    registro = {k: deepcopy(v) for k, v in p.items() if k != "chegada_dt"}
+    espera = max(0, int((agora - paciente.chegada_dt).total_seconds() // 60))
+    registro = deepcopy(p)
     registro.update(
         {
-            "chegada": p["chegada_dt"].strftime("%H:%M"),
-            "chegada_iso": p["chegada_dt"].isoformat(timespec="seconds"),
+            "chegada": paciente.chegada_dt.strftime("%H:%M"),
+            "chegada_iso": paciente.chegada_dt.isoformat(timespec="seconds"),
             "espera_min": espera,
             "nivel_nome": info["nome"],
             "nivel_slug": info["slug"],
@@ -117,19 +116,84 @@ def _serializar_paciente(p, agora):
     return registro
 
 
+def _medicos_dict():
+    """Disponíveis na ordem do Min-Heap de médicos, depois os ocupados."""
+    servico = db["servico"]
+    ordem = servico.fila_medicos.listar_ordenado()  # cópia do heap; o original não muda
+    ocupados = [m for m in servico.listar_medicos() if not m.disponivel]
+    em_atend = {a["medico_id"]: a["paciente"]["nome"] for a in db["atendimentos"].values()}
+    return [
+        {"id": m.id, "nome": m.nome, "concluidos": m.atendimentos, "disponivel": m.disponivel,
+         "paciente": em_atend.get(m.id)}
+        for m in ordem + ocupados
+    ]
+
+
 def _fila_ordenada():
-    """Maior prioridade primeiro (menor nível); empate resolvido por quem chegou antes."""
+    """Ordem de atendimento extraída do Min-Heap (FilaPrioridade)."""
     agora = datetime.now()
-    ordenados = sorted(db["fila"].values(), key=lambda p: (p["nivel"], p["chegada_dt"], p["id"]))
     resultado = []
-    for idx, p in enumerate(ordenados, start=1):
+    for idx, p in enumerate(db["servico"].fila_pacientes.listar_ordenado(), start=1):
         registro = _serializar_paciente(p, agora)
         registro["ordem"] = idx
         resultado.append(registro)
     return resultado
 
 
+def _ordem_chegada(posicoes):
+    """Ordem cronológica extraída da Árvore Rubro-Negra (percurso em ordem)."""
+    agora = datetime.now()
+    resultado = []
+    for idx, p in enumerate(db["servico"].listar_pacientes(), start=1):  # in-order da Rubro-Negra
+        registro = _serializar_paciente(p, agora)
+        registro["chegada_ordem"] = idx
+        registro["ordem"] = posicoes.get(registro["id"])
+        resultado.append(registro)
+    return resultado
+
+
+def _arvore_para_dict(arvore, no):
+    """Leitura recursiva da Rubro-Negra (sem alterar nada) para desenhar na tela."""
+    if no == arvore.NULO:
+        return None
+    return {
+        "id": f"PAC-{no.id}",
+        "horario": no.horario.strftime("%H:%M"),
+        "nivel": no.dados.prioridade,
+        "cor": no.cor,
+        "esq": _arvore_para_dict(arvore, no.esquerda),
+        "dir": _arvore_para_dict(arvore, no.direita),
+    }
+
+
+def _altura(no):
+    return 0 if no is None else 1 + max(_altura(no["esq"]), _altura(no["dir"]))
+
+
+def _resumo_estruturas():
+    servico = db["servico"]
+    tabela = servico.tabela_hash
+    arvore = _arvore_para_dict(servico.arvore, servico.arvore.raiz)
+    return {
+        "integra": servico.validar_integridade(),
+        "arvore_valida": servico.arvore.validar(),
+        "arvore": arvore,
+        "arvore_altura": _altura(arvore),
+        # vetores internos dos heaps, na ordem real do array (índice 0 = raiz)
+        "heap_pacientes": [{"id": p.id_publico, "nivel": p.prioridade} for p in servico.fila_pacientes.fila],
+        "heap_medicos": [{"id": m.id, "nome": m.nome, "concluidos": m.atendimentos} for m in servico.fila_medicos.fila],
+        "hash": {
+            "capacidade": tabela.capacidade,
+            "total": tabela.quantidade(),
+            "colisoes": tabela.total_colisoes,
+            "ocupacao": tabela.ocupacao_percentual(),
+            "buckets": [[f"PAC-{par[0]}" for par in bucket] for bucket in tabela.tabela],
+        },
+    }
+
+
 def _obter_estado():
+    medicos = _medicos_dict()
     ordenados = _fila_ordenada()
     contagem = {nivel: 0 for nivel in NIVEIS_EMERGENCIA}
     for p in ordenados:
@@ -145,6 +209,7 @@ def _obter_estado():
         "proximo": ordenados[0] if ordenados else None,
         "seguintes": ordenados[1:6],
         "pacientes": ordenados,
+        "pacientes_chegada": _ordem_chegada({p["id"]: p["ordem"] for p in ordenados}),
         "contagem_niveis": contagem,
         "historico": atendidos[:50],
         "ultimo_chamado": atendidos[0] if atendidos else None,
@@ -157,6 +222,9 @@ def _obter_estado():
             "espera_media_atendidos": round(sum(espera_atendidos) / len(espera_atendidos)) if espera_atendidos else 0,
         },
         "consultorios": CONSULTORIOS,
+        "medicos": medicos,
+        "proximo_medico": next((m for m in medicos if m["disponivel"]), None),
+        "estruturas": _resumo_estruturas(),
         "atendimentos": deepcopy(list(db["atendimentos"].values())),
         "desfechos": [{"codigo": k, "nome": v} for k, v in DESFECHOS.items()],
         "servidor_hora": datetime.now().strftime("%H:%M:%S"),
@@ -261,31 +329,29 @@ def api_criar_paciente():
             return _erro(f"Valor inválido para o sinal vital '{chave}'.")
 
     with _lock:
-        pid = f"PAC-{db['proximo_id']}"
-        db["proximo_id"] += 1
-        db["fila"][pid] = {
-            "id": pid,
-            "nome": nome,
-            "idade": idade,
-            "sexo": sexo,
-            "nivel": nivel,
-            "queixa": queixa,
-            "sinais": sinais,
-            "observacoes": str(dados.get("observacoes", "")).strip()[:2000],
-            "chegada_dt": datetime.now(),
-            "senha": _gerar_senha(nome, pid),
-        }
+        servico = db["servico"]
+        senha = _gerar_senha(nome, f"PAC-{servico.proximo_id_paciente}")
+        try:
+            paciente = servico.cadastrar_paciente(
+                nome, idade, sexo, nivel, queixa, datetime.now(), sinais=sinais,
+                observacoes=str(dados.get("observacoes", "")).strip()[:2000], senha=senha,
+            )
+        except ValueError as exc:
+            return _erro(str(exc))
         estado = _obter_estado()
-        estado["criado_id"] = pid
+        estado["criado_id"] = paciente.id_publico
         return jsonify(estado), 201
 
 
 @app.route("/api/pacientes/<pid>", methods=["GET"])
 def api_paciente(pid):
     with _lock:
-        for p in _fila_ordenada():
-            if p["id"] == pid:
-                return jsonify(p)
+        try:
+            paciente = db["servico"].buscar_paciente(pid)  # busca pela Tabela Hash
+        except ValueError:
+            paciente = None
+        if paciente is not None:
+            return jsonify(next(p for p in _fila_ordenada() if p["id"] == paciente.id_publico))
     return _erro("Paciente não encontrado na fila.", 404)
 
 
@@ -301,19 +367,53 @@ def api_atualizar_paciente(pid):
         return _erro("Nível de emergência inválido.")
 
     with _lock:
-        paciente = db["fila"].get(pid)
-        if paciente is None:
+        try:
+            db["servico"].reclassificar_paciente(pid, nivel)
+        except ValueError:
             return _erro("Paciente não encontrado na fila.", 404)
-        paciente["nivel"] = nivel
         return jsonify(_obter_estado())
 
 
 @app.route("/api/pacientes/<pid>", methods=["DELETE"])
 def api_remover_paciente(pid):
     with _lock:
-        if db["fila"].pop(pid, None) is None:
+        try:
+            removido = db["servico"].cancelar_paciente(pid)
+        except ValueError:
+            removido = False
+        if not removido:
             return _erro("Paciente não encontrado na fila.", 404)
         return jsonify(_obter_estado())
+
+
+def _criterio_paciente(escolhido, segundo):
+    """Explica por que o paciente estava na raiz do Min-Heap (mesma ordem de paciente_vem_antes)."""
+    nome_nivel = NIVEIS_EMERGENCIA[escolhido.prioridade]["nome"]
+    base = f"Raiz do Min-Heap de pacientes: nível {escolhido.prioridade} ({nome_nivel})"
+    if segundo is None:
+        return {"texto": base + ", único paciente aguardando.", "segundo": None}
+    if escolhido.prioridade != segundo.prioridade:
+        motivo = f"nível {escolhido.prioridade} é mais urgente que o nível {segundo.prioridade} de {segundo.id_publico}"
+    elif escolhido.horario != segundo.horario:
+        motivo = (f"mesmo nível de {segundo.id_publico}, mas chegou antes "
+                  f"({escolhido.horario:%H:%M} × {segundo.horario:%H:%M})")
+    else:
+        motivo = f"mesmo nível e horário de {segundo.id_publico}; desempate pelo menor ID"
+    return {"texto": f"{base}; {motivo}.", "segundo": segundo.id_publico}
+
+
+def _criterio_medico(escolhido, segundo):
+    """Explica por que o médico estava na raiz do Min-Heap (mesma ordem de medico_vem_antes)."""
+    base = f"Raiz do Min-Heap de médicos: {escolhido.atendimentos} atendimento(s) concluído(s)"
+    if segundo is None:
+        return {"texto": base + ", único médico disponível.", "segundo": None}
+    if escolhido.atendimentos != segundo.atendimentos:
+        motivo = f"menos que {segundo.nome} (#{segundo.id}), que tinha {segundo.atendimentos}"
+    elif escolhido.ordem_cadastro != segundo.ordem_cadastro:
+        motivo = f"empate com {segundo.nome} (#{segundo.id}); cadastrado antes"
+    else:
+        motivo = f"empate com {segundo.nome} (#{segundo.id}); desempate pelo menor ID"
+    return {"texto": f"{base}; {motivo}.", "segundo": f"#{segundo.id}"}
 
 
 @app.route("/api/chamar", methods=["POST"])
@@ -323,21 +423,26 @@ def api_chamar():
     consultorio = str(dados.get("consultorio") or CONSULTORIOS[0])
     if consultorio not in CONSULTORIOS:
         return _erro("Consultório inválido.")
-    pid = dados.get("id")
+    if dados.get("id"):
+        return _erro("A chamada segue a fila de prioridade: use 'chamar próximo'.", 400)
 
     with _lock:
         if consultorio in db["atendimentos"]:
             atual = db["atendimentos"][consultorio]["paciente"]["nome"]
             return _erro(f"{consultorio} está atendendo {atual}. Encerre o atendimento antes de chamar outro paciente.", 409)
-        ordenados = _fila_ordenada()
-        if not ordenados:
-            return _erro("Não há pacientes na fila.", 409)
-        if pid:
-            alvo = next((p for p in ordenados if p["id"] == pid), None)
-            if alvo is None:
-                return _erro("Paciente não encontrado na fila.", 404)
-        else:
-            alvo = ordenados[0]
+        try:
+            resultado = db["servico"].chamar_proximo()  # raiz do heap de pacientes + do heap de médicos
+        except ValueError as exc:
+            return _erro(str(exc), 409)
+        alvo = _serializar_paciente(resultado["paciente"], datetime.now())
+        medico = resultado["medico"]
+        # Depois da retirada, a nova raiz de cada heap é quem ficou em 2º lugar:
+        # o critério é gravado agora, porque os heaps mudam depois.
+        criterio = {
+            "paciente": _criterio_paciente(resultado["paciente"], db["servico"].fila_pacientes.ver_proximo()),
+            "medico": _criterio_medico(medico, db["servico"].fila_medicos.ver_proximo()),
+            "medico_concluidos": medico.atendimentos,
+        }
 
         chamada = {
             "seq": db["evento_seq"] + 1,
@@ -350,6 +455,8 @@ def api_chamar():
             "queixa": alvo["queixa"],
             "espera_min": alvo["espera_min"],
             "consultorio": consultorio,
+            "medico": medico.nome,
+            "medico_id": medico.id,
             "horario": datetime.now().strftime("%H:%M"),
             "vezes": 1,
             "status": "em_atendimento",
@@ -359,13 +466,15 @@ def api_chamar():
             "seq": chamada["seq"],
             "consultorio": consultorio,
             "paciente": alvo,
+            "medico": medico.nome,
+            "medico_id": medico.id,
+            "criterio": criterio,
             "inicio": agora.strftime("%H:%M"),
             "inicio_iso": agora.isoformat(timespec="seconds"),
             "prontuario": {**{c: "" for c in CAMPOS_PRONTUARIO}, "desfecho": ""},
             "salvo_em": None,
         }
         db["historico"].insert(0, chamada)
-        db["fila"].pop(alvo["id"], None)
         _registrar_evento("chamada", chamada)
         return jsonify(_obter_estado())
 
@@ -432,6 +541,13 @@ def api_encerrar_atendimento(seq):
         if desfecho not in DESFECHOS:
             return _erro("Selecione o desfecho do atendimento para encerrar.")
 
+        # Primeiro o serviço (o médico volta ao heap, com rollback próprio); só se der certo
+        # o estado da aplicação é alterado. Assim uma falha não deixa o médico preso como ocupado.
+        try:
+            db["servico"].finalizar_atendimento(atendimento["medico_id"])
+        except ValueError as exc:
+            return _erro(str(exc), 409)
+
         agora = datetime.now()
         inicio = datetime.fromisoformat(atendimento["inicio_iso"])
         chamada = next((c for c in db["historico"] if c["seq"] == seq), None)
@@ -448,6 +564,46 @@ def api_encerrar_atendimento(seq):
             )
         db["atendimentos"].pop(atendimento["consultorio"], None)
         return jsonify(_obter_estado())
+
+
+@app.route("/api/estruturas/hash/<pid>", methods=["GET"])
+def api_buscar_hash(pid):
+    """Busca pelo ID usando exclusivamente a Tabela Hash e mostra o bucket consultado."""
+    with _lock:
+        servico = db["servico"]
+        try:
+            id_interno = servico._normalizar_id_paciente(pid.strip().upper())
+            paciente = servico.buscar_paciente(id_interno)  # TabelaHash.buscar
+            bucket = servico.tabela_hash.inspecionar_bucket(id_interno)
+        except ValueError:
+            return _erro("ID inválido. Use o formato PAC-1042.")
+        situacao = "aguardando" if paciente else None
+        if paciente is None:
+            if any(a["paciente"]["id_interno"] == id_interno for a in db["atendimentos"].values()):
+                situacao = "em_atendimento"
+            elif any(h["id"] == f"PAC-{id_interno}" for h in db["historico"]):
+                situacao = "historico"
+        return jsonify({
+            "id": f"PAC-{id_interno}",
+            "indice": id_interno % servico.tabela_hash.capacidade,  # mesma função h(ID) da TabelaHash
+            "bucket": [f"PAC-{par[0]}" for par in bucket],
+            "encontrado": paciente is not None,
+            "nome": paciente.nome if paciente else None,
+            "situacao": situacao,
+        })
+
+
+@app.route("/api/medicos", methods=["POST"])
+def api_cadastrar_medico():
+    nome = str(_json_body().get("nome", "")).strip()[:120]
+    if len(nome) < 3:
+        return _erro("Informe o nome completo do médico.")
+    with _lock:
+        try:
+            db["servico"].cadastrar_medico(nome)
+        except ValueError as exc:
+            return _erro(str(exc))
+        return jsonify(_obter_estado()), 201
 
 
 @app.route("/api/resetar", methods=["POST"])

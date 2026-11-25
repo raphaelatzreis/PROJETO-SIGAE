@@ -6,6 +6,7 @@
   // ---------------------------------------------------------------------------
   var state = window.__INITIAL_STATE__;
   var filtroNivel = 'todos';
+  var ordemFila = 'prioridade';  // 'prioridade' (Min-Heap) ou 'chegada' (Rubro-Negra)
   var termoBusca = '';
   var drawerId = null;
   var ultimoSeq = state.ultimo_evento ? state.ultimo_evento.seq : 0;
@@ -17,6 +18,8 @@
     atendimento: { titulo: 'Atendimento', sub: 'Consultório e fila de espera' },
     fila: { titulo: 'Fila de espera', sub: 'Todos os pacientes aguardando, por prioridade' },
     triagem: { titulo: 'Nova triagem', sub: 'Registrar paciente e classificar o risco' },
+    equipe: { titulo: 'Equipe médica', sub: 'Médicos disponíveis, pelo menor número de atendimentos (Min-Heap)' },
+    estruturas: { titulo: 'Estruturas de dados', sub: 'Tabela Hash, Árvore Rubro-Negra e os dois Min-Heaps em tempo real' },
     historico: { titulo: 'Histórico de chamadas', sub: 'Pacientes já chamados neste turno' }
   };
 
@@ -215,7 +218,7 @@
   }
 
   function renderTabela() {
-    var lista = state.pacientes;
+    var lista = ordemFila === 'chegada' ? state.pacientes_chegada : state.pacientes;
     if (filtroNivel !== 'todos') {
       var n = Number(filtroNivel);
       lista = lista.filter(function (p) { return p.nivel === n; });
@@ -240,7 +243,7 @@
 
     setHTML(el.tbody, lista.map(function (p) {
       return '<tr class="row-click" data-action="ver" data-id="' + esc(p.id) + '">' +
-        '<td class="c-ord mono">' + num(p.ordem) + '</td>' +
+        '<td class="c-ord mono">' + num(ordemFila === 'chegada' ? p.chegada_ordem : p.ordem) + '</td>' +
         '<td><div class="cell-person">' + avatar(p) + '<div><div class="cell-primary">' + esc(p.nome) + '</div>' +
           '<div class="cell-secondary"><span class="mono">' + esc(p.id) + '</span> · ' + num(p.idade) + ' anos · ' + esc(p.sexo) + '</div></div></div></td>' +
         '<td><button type="button" class="badge badge-sm badge-edit lvl-' + num(p.nivel) + '" data-action="nivel" data-id="' + esc(p.id) + '"' +
@@ -249,14 +252,14 @@
         '<td class="c-hide-sm cell-complaint">' + esc(p.queixa) + '</td>' +
         '<td class="c-wait"><div class="cell-primary mono wait-' + classeEspera(p) + '">' + fmtEspera(p.espera_min) + '</div>' +
           '<div class="cell-secondary">alvo ' + esc(p.tempo_alvo.replace('Até ', '')) + '</div></td>' +
-        '<td class="c-act"><button type="button" class="btn btn-ghost btn-sm" data-action="chamar" data-id="' + esc(p.id) + '" title="Chamar agora">' + ICON.megafone + '<span class="c-hide-sm">Chamar</span></button></td>' +
+        '<td class="c-act">' + (p.ordem === 1 ? '<span class="badge badge-sm">Próximo</span>' : '') + '</td>' +
       '</tr>';
     }).join(''));
   }
 
   function renderHistorico() {
     if (!state.historico.length) {
-      setHTML(el.hist, '<tr><td colspan="7" class="table-empty">Nenhuma chamada registrada ainda.</td></tr>');
+      setHTML(el.hist, '<tr><td colspan="8" class="table-empty">Nenhuma chamada registrada ainda.</td></tr>');
       return;
     }
     setHTML(el.hist, state.historico.map(function (c, i) {
@@ -266,6 +269,9 @@
           '<div class="cell-secondary mono">' + esc(c.senha) + ' · ' + esc(c.id) + (c.vezes > 1 ? ' · chamado ' + num(c.vezes) + 'x' : '') + '</div></div></div></td>' +
         '<td>' + badge(c, true) + '</td>' +
         '<td>' + esc(c.consultorio) + '</td>' +
+        '<td>' + (c.medico
+          ? '<div class="cell-primary">' + esc(c.medico) + '</div><div class="cell-secondary mono">#' + num(c.medico_id) + '</div>'
+          : '<span class="muted">—</span>') + '</td>' +
         '<td class="c-hide-sm mono">' + fmtEspera(c.espera_min) + '</td>' +
         '<td>' + (c.status === 'encerrado'
           ? '<span class="status status-done">' + esc(c.desfecho_nome) + '</span><div class="cell-secondary">' + fmtEspera(c.duracao_min) + ' de consulta · ' + esc(c.fim) + '</div>'
@@ -304,8 +310,164 @@
       '<h3 class="drawer-sec">Tempo de espera</h3>' + barraEspera(p) +
       '<div class="drawer-actions">' +
         '<button type="button" class="btn btn-ghost btn-danger" data-action="remover" data-id="' + esc(p.id) + '">' + ICON.lixo + 'Remover</button>' +
-        '<button type="button" class="btn btn-call" data-action="chamar" data-id="' + esc(p.id) + '">' + ICON.megafone + 'Chamar agora</button>' +
+
       '</div>');
+  }
+
+  function renderEquipe() {
+    var px = state.proximo_medico;
+    $('medico-proximo').textContent = px
+      ? 'Próximo a ser designado: ' + px.nome + ' (' + px.concluidos + ' concluído(s))'
+      : 'Nenhum médico disponível: as chamadas ficam bloqueadas.';
+    setHTML($('medicos-tbody'), (state.medicos || []).map(function (m, i) {
+      return '<tr><td class="c-ord mono">' + (m.disponivel ? num(i + 1) : '—') + '</td>' +
+        '<td><div class="cell-primary">' + esc(m.nome) + '</div><div class="cell-secondary mono">#' + num(m.id) + '</div></td>' +
+        '<td class="mono">' + num(m.concluidos) + '</td>' +
+        '<td>' + (m.disponivel ? 'Disponível' : 'Em atendimento · ' + esc(m.paciente)) + '</td></tr>';
+    }).join('') || '<tr><td colspan="4" class="table-empty">Nenhum médico cadastrado.</td></tr>');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Seção Estruturas: Hash, Rubro-Negra e os dois Min-Heaps (somente leitura)
+  // ---------------------------------------------------------------------------
+  var hashAlvo = null;   // { indice, id } da última busca na Hash
+  var SVG_NS = 'http://www.w3.org/2000/svg';
+  var R = 19, DX = 50, DY = 62;
+
+  function svgEl(tag, attrs, texto) {
+    var n = document.createElementNS(SVG_NS, tag);
+    Object.keys(attrs || {}).forEach(function (k) { n.setAttribute(k, attrs[k]); });
+    if (texto !== undefined) n.textContent = texto;
+    return n;
+  }
+
+  // nos: [{ chave, x, y, rotulo, extra, classe, titulo }]; arestas: [[chavePai, chaveFilho]]
+  function desenharArvore(alvo, nos, arestas, largura, altura) {
+    alvo.replaceChildren();
+    if (!nos.length) {
+      var vazio = document.createElement('p');
+      vazio.className = 'muted est-vazio';
+      vazio.textContent = 'Estrutura vazia.';
+      alvo.appendChild(vazio);
+      return;
+    }
+    var svg = svgEl('svg', { viewBox: '0 0 ' + largura + ' ' + altura, role: 'img' });
+    svg.style.minWidth = largura + 'px';  // árvores largas rolam na horizontal
+    var pos = {};
+    nos.forEach(function (n) { pos[n.chave] = n; });
+    arestas.forEach(function (a) {
+      var p = pos[a[0]], f = pos[a[1]];
+      svg.appendChild(svgEl('line', { x1: p.x, y1: p.y, x2: f.x, y2: f.y, class: 'est-aresta' }));
+    });
+    nos.forEach(function (n) {
+      var g = svgEl('g', { class: 'est-no ' + n.classe });
+      g.appendChild(svgEl('title', {}, n.titulo));
+      g.appendChild(svgEl('circle', { cx: n.x, cy: n.y, r: R }));
+      g.appendChild(svgEl('text', { x: n.x, y: n.y + 4, 'text-anchor': 'middle', class: 'est-rotulo' }, n.rotulo));
+      if (n.extra) g.appendChild(svgEl('text', { x: n.x, y: n.y + R + 13, 'text-anchor': 'middle', class: 'est-extra' }, n.extra));
+      svg.appendChild(g);
+    });
+    alvo.appendChild(svg);
+  }
+
+  function desenharRubroNegra(raiz) {
+    // x = posição no percurso em ordem (ordem de chegada); y = profundidade
+    var nos = [], arestas = [], ordem = 0, prof = 0;
+    (function visitar(no, d, pai) {
+      if (!no) return;
+      visitar(no.esq, d + 1, no);
+      prof = Math.max(prof, d);
+      nos.push({
+        chave: no.id, x: R + 8 + ordem * DX, y: R + 8 + d * DY,
+        rotulo: no.id.replace('PAC-', ''), extra: no.horario,
+        classe: no.cor === 'VERMELHO' ? 'rb-vermelho' : 'rb-preto',
+        titulo: no.id + ' · chegou ' + no.horario + ' · ' + (no.cor === 'VERMELHO' ? 'vermelho' : 'preto') + ' · nível ' + no.nivel
+      });
+      ordem++;
+      if (pai) arestas.push([pai.id, no.id]);
+      visitar(no.dir, d + 1, no);
+    })(raiz, 0, null);
+    desenharArvore($('rb-svg'), nos, arestas, Math.max(ordem * DX + 16, 200), (prof + 1) * DY + 20);
+  }
+
+  // Heap guardado em vetor: filho esquerdo de i em 2i+1, direito em 2i+2
+  function desenharHeap(alvo, vetor, rotulo, extra, titulo) {
+    var n = vetor.length;
+    var niveis = n ? Math.floor(Math.log2(n)) + 1 : 0;
+    var largura = Math.max(Math.pow(2, Math.max(niveis - 1, 0)) * DX + 16, 200);
+    var nos = vetor.map(function (item, i) {
+      var d = Math.floor(Math.log2(i + 1)), slot = i - (Math.pow(2, d) - 1), vagas = Math.pow(2, d);
+      return {
+        chave: String(i), x: (slot + 0.5) * largura / vagas, y: R + 8 + d * DY,
+        rotulo: rotulo(item), extra: extra(item), classe: i === 0 ? 'heap-raiz' : 'heap-no', titulo: '[' + i + '] ' + titulo(item)
+      };
+    });
+    var arestas = vetor.map(function (_, i) { return i ? [String(Math.floor((i - 1) / 2)), String(i)] : null; })
+      .filter(Boolean);
+    desenharArvore(alvo, nos, arestas, largura, niveis * DY + 20);
+  }
+
+  function renderEstruturas() {
+    var e = state.estruturas, h = e.hash;
+
+    setHTML($('est-status'), e.integra
+      ? '<span class="est-ok">✓ Integridade OK</span> Hash, Rubro-Negra, Heap de pacientes e Heap de médicos com os mesmos pacientes ativos.'
+      : '<span class="est-erro">✗ Inconsistência</span> As estruturas divergem. Verifique o servidor.');
+
+    var abertos = state.atendimentos || [];
+    setHTML($('vinculos'), abertos.length ? abertos.map(function (a) {
+      var p = a.paciente, c = a.criterio;
+      var concluidos = c ? num(c.medico_concluidos) + ' concluído(s) ao ser designado' : '';
+      return '<div class="vinculo">' +
+        '<div class="vinculo-lado lvl-' + num(p.nivel) + '">' +
+          '<span class="vinculo-tipo">Paciente</span>' +
+          '<div class="vinculo-nome">' + esc(p.nome) + '</div>' +
+          '<div class="vinculo-info"><strong class="mono">' + esc(p.id) + '</strong> · ' + badge(p, true) + ' · chegou ' + esc(p.chegada) + '</div>' +
+          (c ? '<p class="vinculo-criterio">' + esc(c.paciente.texto) + '</p>' : '') +
+        '</div>' +
+        '<div class="vinculo-meio"><span class="vinculo-seta" aria-hidden="true">⇄</span><span>' + esc(a.consultorio) + '</span>' +
+          '<span class="mono">desde ' + esc(a.inicio) + '</span></div>' +
+        '<div class="vinculo-lado">' +
+          '<span class="vinculo-tipo">Médico</span>' +
+          '<div class="vinculo-nome">' + esc(a.medico) + '</div>' +
+          '<div class="vinculo-info"><strong class="mono">#' + num(a.medico_id) + '</strong>' + (concluidos ? ' · ' + concluidos : '') + '</div>' +
+          (c ? '<p class="vinculo-criterio">' + esc(c.medico.texto) + '</p>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('') : '<p class="muted est-vazio">Nenhum atendimento em andamento. Chame o próximo paciente na tela de Atendimento.</p>');
+
+    $('hash-resumo').textContent = 'Encadeamento separado · h(ID) = ID % ' + num(h.capacidade) + ' · ' + num(h.total) +
+      ' paciente(s) · ' + num(h.colisoes) + ' colisão(ões) · ocupação ' + num(h.ocupacao) + '% (dobra de tamanho acima de 75%)';
+    setHTML($('hash-buckets'), h.buckets.map(function (b, i) {
+      var classe = 'bucket' + (b.length > 1 ? ' bucket-hot' : '') + (hashAlvo && hashAlvo.indice === i ? ' bucket-alvo' : '');
+      return '<div class="' + classe + '"><span class="bucket-idx mono">' + num(i) + '</span>' +
+        (b.length ? b.map(function (id) {
+          var achado = hashAlvo && hashAlvo.id === id ? ' bucket-achado' : '';
+          return '<span class="bucket-item mono' + achado + '">' + esc(id) + '</span>';
+        }).join('') : '<span class="muted">—</span>') + '</div>';
+    }).join(''));
+
+    $('rb-resumo').textContent = num(h.total) + ' nó(s) · altura ' + num(e.arvore_altura) + ' · ' +
+      (e.arvore_valida ? 'propriedades rubro-negras válidas' : 'propriedades violadas!');
+    desenharRubroNegra(e.arvore);
+
+    var hp = e.heap_pacientes;
+    $('heap-resumo').textContent = hp.length
+      ? 'Raiz: ' + hp[0].id + ' (nível ' + hp[0].nivel + ') · ' + hp.length + ' no vetor'
+      : 'Nenhum paciente aguardando.';
+    desenharHeap($('heap-svg'), hp,
+      function (p) { return p.id.replace('PAC-', ''); },
+      function (p) { return 'P' + p.nivel; },
+      function (p) { return p.id + ' · nível ' + p.nivel; });
+
+    var hm = e.heap_medicos;
+    $('heap-med-resumo').textContent = hm.length
+      ? 'Raiz: ' + hm[0].nome + ' (' + hm[0].concluidos + ' concluído(s)) · só médicos disponíveis ficam no heap'
+      : 'Nenhum médico disponível: as chamadas ficam bloqueadas.';
+    desenharHeap($('heap-med-svg'), hm,
+      function (m) { return '#' + m.id; },
+      function (m) { return m.concluidos + ' at.'; },
+      function (m) { return m.nome + ' · ' + m.concluidos + ' atendimento(s) concluído(s)'; });
   }
 
   function renderNav() {
@@ -321,6 +483,8 @@
     renderHistorico();
     renderDrawer();
     renderNav();
+    renderEquipe();
+    renderEstruturas();
     renderPreview();
   }
 
@@ -342,6 +506,52 @@
     if (rota === 'triagem') setTimeout(function () { el.form.elements.nome.focus(); }, 50);
   }
   window.addEventListener('hashchange', irPara);
+
+  $('ordem-group').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-ordem]');
+    if (!b) return;
+    ordemFila = b.getAttribute('data-ordem');
+    this.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('active', c === b); });
+    renderTabela();
+  });
+
+  $('hash-busca').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var id = $('hash-id').value.trim().toUpperCase();
+    if (/^\d+$/.test(id)) id = 'PAC-' + id;
+    var saida = $('hash-resultado');
+    api('GET', '/api/estruturas/hash/' + encodeURIComponent(id))
+      .then(function (r) {
+        hashAlvo = { indice: r.indice, id: r.id };
+        var onde = 'h(' + r.id.replace('PAC-', '') + ') = bucket ' + r.indice + ' · ' + r.bucket.length + ' registro(s) no bucket';
+        var SITUACOES = { em_atendimento: 'em atendimento (já saiu da Hash)', historico: 'atendimento encerrado (já saiu da Hash)' };
+        saida.className = 'est-resultado ' + (r.encontrado ? 'est-ok' : 'est-erro');
+        saida.textContent = r.encontrado
+          ? 'Encontrado: ' + r.nome + ' · ' + onde
+          : 'Não está na Hash' + (r.situacao ? ': ' + SITUACOES[r.situacao] : '') + ' · ' + onde;
+        saida.hidden = false;
+        renderEstruturas();
+      })
+      .catch(function (err) {
+        hashAlvo = null;
+        saida.className = 'est-resultado est-erro';
+        saida.textContent = err.message;
+        saida.hidden = false;
+        renderEstruturas();
+      });
+  });
+
+  $('medico-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var nome = $('medico-nome').value.trim();
+    api('POST', '/api/medicos', { nome: nome })
+      .then(function (novo) {
+        state = novo; renderTudo();
+        $('medico-nome').value = '';
+        toast('Médico ' + nome + ' cadastrado.', 'success');
+      })
+      .catch(function (err) { toast(err.message, 'error'); });
+  });
 
   // ---------------------------------------------------------------------------
   // Gaveta "Ver paciente"
@@ -483,8 +693,10 @@
     el.consult.className = 'card consult lvl-' + num(p.nivel);
     setHTML(el.consult, '<header class="cs-head">' + avatar(p, 'lg') +
         '<div class="cs-id"><div class="cs-title"><h2 class="cs-name">' + esc(p.nome) + '</h2>' + badge(p, true) + '</div>' +
-          '<p class="cs-sub"><strong class="mono">' + esc(p.senha) + '</strong> · ' + num(p.idade) + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') +
-          ' · chamado às ' + esc(a.inicio) + '<span id="cs-vezes">' + (vezes > 1 ? ' · chamado ' + num(vezes) + 'x' : '') + '</span></p></div>' +
+          '<p class="cs-sub"><strong class="mono">' + esc(p.id) + '</strong> · senha <span class="mono">' + esc(p.senha) + '</span> · ' +
+          num(p.idade) + ' anos · ' + (p.sexo === 'F' ? 'Feminino' : 'Masculino') +
+          ' · chamado às ' + esc(a.inicio) + '<span id="cs-vezes">' + (vezes > 1 ? ' · chamado ' + num(vezes) + 'x' : '') + '</span></p>' +
+          '<p class="cs-sub cs-medico">Médico: <strong>' + esc(a.medico) + '</strong> · ID <strong class="mono">#' + num(a.medico_id) + '</strong></p></div>' +
         '<div class="cs-timer"><span class="live-dot"></span><span>Em atendimento</span><strong class="mono" id="cs-timer">00:00</strong></div>' +
       '</header>' +
       '<div class="cs-body">' +
