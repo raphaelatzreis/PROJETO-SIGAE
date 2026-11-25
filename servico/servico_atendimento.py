@@ -237,11 +237,7 @@ class ServicoAtendimento:
         self.pacientes[id_paciente] = paciente
 
     def chamar_proximo(self):
-        """Chama o paciente mais urgente e o médico disponível com menos atendimentos.
-
-        Se alguma operação falhar, tenta restaurar o estado anterior
-        do paciente e do médico.
-        """
+        """Chama o paciente mais urgente e o médico disponível com menos atendimentos."""
         paciente = self.fila_pacientes.ver_proximo()
         medico = self.fila_medicos.ver_proximo()
 
@@ -292,13 +288,23 @@ class ServicoAtendimento:
         if medico is None:
             raise ValueError("Médico não encontrado.")
 
+        disponibilidade_anterior = medico.disponivel
+        atendimentos_anteriores = medico.atendimentos
+
         medico.finalizar_atendimento()
 
         try:
             self.fila_medicos.inserir(medico)
+
         except Exception:
-            medico.atendimentos -= 1
-            medico.disponivel = False
+            # A inserção pode ter ocorrido antes de uma falha ser lançada.
+            # Por isso, verificamos e removemos o médico da fila.
+            if self.fila_medicos.esta_na_fila(id_medico):
+                self.fila_medicos.remover(id_medico)
+
+            medico.disponivel = disponibilidade_anterior
+            medico.atendimentos = atendimentos_anteriores
+
             raise
 
         return medico
