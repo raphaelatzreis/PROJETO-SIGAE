@@ -70,6 +70,13 @@ class TesteMedico(unittest.TestCase):
         self.assertEqual(self.medico.atendimentos, 1)
         self.assertTrue(self.medico.disponivel)
 
+    def test_registrar_ausencia_sem_contabilizar_atendimento(self):
+        self.medico.iniciar_atendimento()
+        self.medico.registrar_ausencia()
+
+        self.assertEqual(self.medico.atendimentos, 0)
+        self.assertTrue(self.medico.disponivel)
+
     def test_impedir_atendimento_simultaneo(self):
         self.medico.iniciar_atendimento()
 
