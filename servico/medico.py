@@ -49,6 +49,12 @@ class Medico:
         self.atendimentos += 1
         self.disponivel = True
 
+    def registrar_ausencia(self):
+        if self.disponivel:
+            raise ValueError("O médico não possui atendimento em andamento.")
+
+        self.disponivel = True
+
     def to_dict(self):
         return {
             "id": self.id,
