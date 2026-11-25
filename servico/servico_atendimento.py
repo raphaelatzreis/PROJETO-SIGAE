@@ -86,7 +86,6 @@ class ServicoAtendimento:
 
         hash_inserida = False
         arvore_inserida = False
-        fila_inserida = False
 
         try:
             self.tabela_hash.inserir(id_paciente, paciente)
@@ -100,11 +99,8 @@ class ServicoAtendimento:
             arvore_inserida = True
 
             self.fila_pacientes.inserir(paciente)
-            fila_inserida = True
 
         except Exception:
-            if fila_inserida:
-                self.fila_pacientes.remover(id_paciente)
 
             if arvore_inserida:
                 self.arvore.remover(paciente.horario, id_paciente)
@@ -151,7 +147,6 @@ class ServicoAtendimento:
         if paciente is None:
             return False
 
-        hash_removida = False
         arvore_removida = False
         fila_removida = False
 
@@ -169,11 +164,8 @@ class ServicoAtendimento:
                 raise RuntimeError(
                     "Não foi possível remover o paciente da Hash."
                 )
-            hash_removida = True
 
         except Exception:
-            if hash_removida:
-                self.tabela_hash.inserir(id_interno, paciente)
 
             if arvore_removida:
                 self.arvore.inserir(
