@@ -26,6 +26,17 @@ class TesteIndicadoresApp(unittest.TestCase):
         self.assertEqual(estado["estatisticas"]["atendidos"], 1)
         self.assertEqual(estado["estatisticas"]["espera_media_atendidos"], 10)
 
+    def test_historico_antigo_sem_desfecho_continua_contabilizado(self):
+        app.db["historico"] = [
+            {"seq": 1, "espera_min": 20},
+            {"seq": 2, "desfecho": "nao_compareceu", "espera_min": 30},
+        ]
+
+        estado = app._obter_estado()
+
+        self.assertEqual(estado["estatisticas"]["atendidos"], 1)
+        self.assertEqual(estado["estatisticas"]["espera_media_atendidos"], 20)
+
 
 if __name__ == "__main__":
     unittest.main()
