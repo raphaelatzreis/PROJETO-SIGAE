@@ -98,7 +98,7 @@ class FilaPrioridade:
     # ---------- operacoes da fila ----------
 
     def inserir(self, pessoa):
-        if not isinstance(pessoa.id, int) or pessoa.id < 0:
+        if isinstance(pessoa.id, bool) or not isinstance(pessoa.id, int) or pessoa.id < 0:
             raise ValueError(f"O id {pessoa.id} precisa ser um inteiro maior ou igual a zero.")
         if self.esta_na_fila(pessoa.id):
             raise ValueError(f"O id {pessoa.id} já está na fila.")
@@ -107,7 +107,27 @@ class FilaPrioridade:
         posicao_no_fim_da_fila = len(self.fila) - 1
         self._guardar_posicao(pessoa.id, posicao_no_fim_da_fila)
 
-        self.subir(posicao_no_fim_da_fila)
+        try:
+            self.subir(posicao_no_fim_da_fila)
+        except Exception:
+            self._desfazer_insercao(pessoa, posicao_no_fim_da_fila)
+            raise
+
+    def _desfazer_insercao(self, pessoa, posicao_onde_entrou):
+        posicao_atual = self._buscar_posicao(pessoa.id)
+
+        caminho_percorrido = []
+        posicao = posicao_onde_entrou
+        while posicao != posicao_atual:
+            caminho_percorrido.append(posicao)
+            posicao = self._posicao_acima(posicao)
+
+        for posicao_de_volta in reversed(caminho_percorrido):
+            self._trocar(posicao_atual, posicao_de_volta)
+            posicao_atual = posicao_de_volta
+
+        self.fila.pop()
+        self._apagar_posicao(pessoa.id)
 
     def remover_minimo(self):
         if self.esta_vazia():
@@ -125,13 +145,15 @@ class FilaPrioridade:
 
         return pessoa_mais_urgente
 
-    def alterar_prioridade(self, id_pessoa):
+    def alterar_prioridade(self, id_pessoa, nova_prioridade=None):
         posicao_atual = self._buscar_posicao(id_pessoa)
         if posicao_atual is None:
             raise ValueError(f"O id {id_pessoa} não está na fila.")
 
         pessoa_reclassificada = self.fila[posicao_atual]
-
+        if nova_prioridade is not None:
+            pessoa_reclassificada.prioridade = nova_prioridade
+        
         self.subir(posicao_atual)
 
         posicao_depois_de_subir = self._buscar_posicao(id_pessoa)
