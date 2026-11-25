@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import patch
 
 from servico.servico_atendimento import ServicoAtendimento
+from servico.medico import Medico
 
 
 class TesteServicoAtendimento(unittest.TestCase):
@@ -136,6 +137,35 @@ class TesteServicoAtendimento(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.servico.chamar_proximo()
+
+    def test_integridade_detecta_medico_duplicado_na_fila(self):
+        medico = self.servico.cadastrar_medico("Dra. Ana")
+
+        self.servico.fila_medicos.fila.append(medico)
+
+        self.assertFalse(self.servico.validar_integridade())
+
+    def test_integridade_detecta_medico_diferente_do_registrado(self):
+        medico = self.servico.cadastrar_medico("Dra. Ana")
+
+        substituto = Medico(
+            id=medico.id,
+            nome="Dr. Substituto",
+            especialidade=medico.especialidade,
+            atendimentos=medico.atendimentos,
+            ordem_cadastro=medico.ordem_cadastro,
+        )
+
+        self.servico.fila_medicos.fila[0] = substituto
+
+        self.assertFalse(self.servico.validar_integridade())
+
+    def test_integridade_detecta_medico_indisponivel_na_fila(self):
+        medico = self.servico.cadastrar_medico("Dra. Ana")
+
+        medico.disponivel = False
+
+        self.assertFalse(self.servico.validar_integridade())
 
 
 if __name__ == "__main__":

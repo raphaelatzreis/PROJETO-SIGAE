@@ -160,11 +160,15 @@ class ServicoAtendimento:
             fila_removida = True
 
             if not self.arvore.remover(paciente.horario, id_interno):
-                raise RuntimeError("Não foi possível remover o paciente da árvore.")
+                raise RuntimeError(
+                    "Não foi possível remover o paciente da árvore."
+                )
             arvore_removida = True
 
             if not self.tabela_hash.remover(id_interno):
-                raise RuntimeError("Não foi possível remover o paciente da Hash.")
+                raise RuntimeError(
+                    "Não foi possível remover o paciente da Hash."
+                )
             hash_removida = True
 
         except Exception:
@@ -228,7 +232,9 @@ class ServicoAtendimento:
 
         try:
             if not self.cancelar_paciente(id_paciente):
-                raise RuntimeError("Não foi possível retirar o paciente da fila.")
+                raise RuntimeError(
+                    "Não foi possível retirar o paciente da fila."
+                )
 
             self.fila_medicos.remover(id_medico)
             medico.iniciar_atendimento()
@@ -244,7 +250,10 @@ class ServicoAtendimento:
                 self.fila_pacientes.inserir(paciente)
                 self.pacientes[id_paciente] = paciente
 
-            if medico.disponivel and not self.fila_medicos.esta_na_fila(id_medico):
+            if (
+                medico.disponivel
+                and not self.fila_medicos.esta_na_fila(id_medico)
+            ):
                 self.fila_medicos.inserir(medico)
 
             raise
@@ -283,7 +292,8 @@ class ServicoAtendimento:
         return list(self.medicos.values())
 
     def validar_integridade(self):
-        """Confere se Hash, árvore e Heap possuem os mesmos pacientes."""
+        """Confere a consistência dos pacientes e médicos nas estruturas."""
+
         if not self.tabela_hash.validar():
             return False
 
@@ -314,6 +324,9 @@ class ServicoAtendimento:
         if set(pacientes_hash) != set(self.pacientes):
             return False
 
+        if len(pacientes_fila) != len(self.fila_pacientes.fila):
+            return False
+
         for id_paciente, paciente in pacientes_hash.items():
             if pacientes_arvore[id_paciente] is not paciente:
                 return False
@@ -324,10 +337,30 @@ class ServicoAtendimento:
             if self.pacientes[id_paciente] is not paciente:
                 return False
 
-        medicos_disponiveis = {
-            medico.id
-            for medico in self.fila_medicos.fila
-        }
+        medicos_na_fila = self.fila_medicos.fila
+
+        ids_medicos_na_fila = [
+            medico.id for medico in medicos_na_fila
+        ]
+
+        if len(ids_medicos_na_fila) != len(set(ids_medicos_na_fila)):
+            return False
+
+        for id_medico, medico in self.medicos.items():
+            if medico.id != id_medico:
+                return False
+
+            if not isinstance(medico.disponivel, bool):
+                return False
+
+        for medico in medicos_na_fila:
+            medico_registrado = self.medicos.get(medico.id)
+
+            if medico_registrado is not medico:
+                return False
+
+            if not medico.disponivel:
+                return False
 
         medicos_esperados = {
             medico.id
@@ -335,7 +368,7 @@ class ServicoAtendimento:
             if medico.disponivel
         }
 
-        if medicos_disponiveis != medicos_esperados:
+        if set(ids_medicos_na_fila) != medicos_esperados:
             return False
 
         return True
