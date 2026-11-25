@@ -58,7 +58,7 @@ print(f"Teste 4 ok: chegou Matheus (prioridade 1, emergência). "
 
 try:
     fila.inserir(PacienteTeste(101, "Repetido", 1, "09:00"))
-    print("Teste 5 FALHOU: deixou entrar número de atendimento repetido")
+    raise AssertionError("Teste 5 FALHOU: deixou entrar número de atendimento repetido")
 except ValueError:
     print(f"Teste 5 ok: número 101 (Marcos) já está na fila, cadastro repetido bloqueado "
         f"({fila.tamanho()} na fila)")
@@ -80,7 +80,7 @@ print(f"Teste 7 ok: Marcos reclassificado de 1 para 5 (não urgente). "
 
 try:
     fila.alterar_prioridade(999)
-    print("Teste 8 FALHOU: deixou reclassificar um número que não está na fila")
+    raise AssertionError("Teste 8 FALHOU: deixou reclassificar um número que não está na fila")
 except ValueError:
     print("Teste 8 ok: número 999 não está na fila, reclassificação bloqueada")
 
@@ -101,7 +101,7 @@ print(f"Teste 10 ok: Matheus cancelou e saiu da raiz da fila. "
 
 try:
     fila.remover(999)
-    print("Teste 11 FALHOU: deixou cancelar um número que não está na fila")
+    raise AssertionError("Teste 11 FALHOU: deixou cancelar um número que não está na fila")
 except ValueError:
     print("Teste 11 ok: número 999 não está na fila, cancelamento bloqueado")
 
@@ -218,7 +218,7 @@ print("=== Teste das correções da revisão do PR ===")
 
 try:
     fila.inserir(PacienteTeste(True, "Booleano", 2, "09:00"))
-    print("Teste 25 FALHOU: deixou entrar um id True")
+    raise AssertionError("Teste 25 FALHOU: deixou entrar um id True")
 except ValueError:
     print(f"Teste 25 ok: id True foi recusado e não foi confundido com o número 1 "
         f"({fila.tamanho()} na fila)")
@@ -233,7 +233,7 @@ class PacienteIncompleto:
 posicoes_antes_do_erro = fila.posicoes[:]
 try:
     fila.inserir(PacienteIncompleto(105, "Sem triagem"))
-    print("Teste 26 FALHOU: deixou entrar um paciente sem prioridade e sem horário")
+    raise AssertionError("Teste 26 FALHOU: deixou entrar um paciente sem prioridade e sem horário")
 except AttributeError:
     assert fila.tamanho() == 3
     assert not fila.esta_na_fila(105)
@@ -245,7 +245,7 @@ except AttributeError:
 
 try:
     fila.inserir(PacienteTeste(106, "Prioridade em texto", "1", "09:00"))
-    print("Teste 27 FALHOU: deixou entrar prioridade em texto")
+    raise AssertionError("Teste 27 FALHOU: deixou entrar prioridade em texto")
 except TypeError:
     assert fila.tamanho() == 3
     assert not fila.esta_na_fila(106)
