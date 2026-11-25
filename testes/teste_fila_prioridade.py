@@ -213,4 +213,53 @@ fila_vazia = FilaPrioridade(paciente_vem_antes)
 assert fila_vazia.listar_ordenado() == []
 print("Teste 24 ok: com o pronto-socorro vazio, a fila de espera aparece vazia")
 
+print()
+print("=== Teste das correções da revisão do PR ===")
+
+try:
+    fila.inserir(PacienteTeste(True, "Booleano", 2, "09:00"))
+    print("Teste 25 FALHOU: deixou entrar um id True")
+except ValueError:
+    print(f"Teste 25 ok: id True foi recusado e não foi confundido com o número 1 "
+        f"({fila.tamanho()} na fila)")
+
+
+class PacienteIncompleto:
+    def __init__(self, id, nome):
+        self.id = id
+        self.nome = nome
+
+
+posicoes_antes_do_erro = fila.posicoes[:]
+try:
+    fila.inserir(PacienteIncompleto(105, "Sem triagem"))
+    print("Teste 26 FALHOU: deixou entrar um paciente sem prioridade e sem horário")
+except AttributeError:
+    assert fila.tamanho() == 3
+    assert not fila.esta_na_fila(105)
+    assert fila.posicoes[:len(posicoes_antes_do_erro)] == posicoes_antes_do_erro
+    valida, mensagem = fila.validar()
+    assert valida, mensagem
+    print(f"Teste 26 ok: paciente sem prioridade e sem horário deu erro e a fila voltou "
+        f"a ser exatamente como antes ({fila.tamanho()} na fila)")
+
+try:
+    fila.inserir(PacienteTeste(106, "Prioridade em texto", "1", "09:00"))
+    print("Teste 27 FALHOU: deixou entrar prioridade em texto")
+except TypeError:
+    assert fila.tamanho() == 3
+    assert not fila.esta_na_fila(106)
+    valida, mensagem = fila.validar()
+    assert valida, mensagem
+    print(f"Teste 27 ok: prioridade \"1\" em texto deu erro e a fila voltou "
+        f"a ser exatamente como antes ({fila.tamanho()} na fila)")
+
+fila.alterar_prioridade(101, 1)
+assert marcos.prioridade == 1
+assert fila.ver_proximo().nome == "Marcos"
+valida, mensagem = fila.validar()
+assert valida, mensagem
+print(f"Teste 28 ok: Marcos reclassificado para 1 numa única operação, "
+    f"alterar_prioridade(101, 1). Próximo: Marcos ({fila.tamanho()} na fila)")
+
 print("=== Todos os testes passaram ===")
