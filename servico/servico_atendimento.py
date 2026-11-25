@@ -214,10 +214,34 @@ class ServicoAtendimento:
         return medico
 
     def buscar_medico(self, id_medico):
+        """Busca um médico pelo ID."""
         return self.medicos.get(id_medico)
 
+    def _restaurar_paciente(self, paciente):
+        """Garante que o paciente esteja presente nas três estruturas."""
+        id_paciente = paciente.id
+
+        if self.tabela_hash.buscar(id_paciente) is None:
+            self.tabela_hash.inserir(id_paciente, paciente)
+
+        if self.arvore.buscar(paciente.horario, id_paciente) is None:
+            self.arvore.inserir(
+                paciente.horario,
+                id_paciente,
+                paciente,
+            )
+
+        if not self.fila_pacientes.esta_na_fila(id_paciente):
+            self.fila_pacientes.inserir(paciente)
+
+        self.pacientes[id_paciente] = paciente
+
     def chamar_proximo(self):
-        """Seleciona o paciente mais urgente e o médico disponível com menos atendimentos."""
+        """Chama o paciente mais urgente e o médico disponível com menos atendimentos.
+
+        Se alguma operação falhar, tenta restaurar o estado anterior
+        do paciente e do médico.
+        """
         paciente = self.fila_pacientes.ver_proximo()
         medico = self.fila_medicos.ver_proximo()
 
@@ -230,6 +254,9 @@ class ServicoAtendimento:
         id_paciente = paciente.id
         id_medico = medico.id
 
+        disponibilidade_anterior = medico.disponivel
+        atendimentos_anteriores = medico.atendimentos
+
         try:
             if not self.cancelar_paciente(id_paciente):
                 raise RuntimeError(
@@ -240,18 +267,13 @@ class ServicoAtendimento:
             medico.iniciar_atendimento()
 
         except Exception:
-            if id_paciente not in self.pacientes:
-                self.tabela_hash.inserir(id_paciente, paciente)
-                self.arvore.inserir(
-                    paciente.horario,
-                    paciente.id,
-                    paciente,
-                )
-                self.fila_pacientes.inserir(paciente)
-                self.pacientes[id_paciente] = paciente
+            self._restaurar_paciente(paciente)
+
+            medico.disponivel = disponibilidade_anterior
+            medico.atendimentos = atendimentos_anteriores
 
             if (
-                medico.disponivel
+                disponibilidade_anterior
                 and not self.fila_medicos.esta_na_fila(id_medico)
             ):
                 self.fila_medicos.inserir(medico)
@@ -289,11 +311,11 @@ class ServicoAtendimento:
         ]
 
     def listar_medicos(self):
+        """Retorna todos os médicos cadastrados."""
         return list(self.medicos.values())
 
     def validar_integridade(self):
         """Confere a consistência dos pacientes e médicos nas estruturas."""
-
         if not self.tabela_hash.validar():
             return False
 
