@@ -137,7 +137,8 @@ def _obter_estado():
 
     esperas = [p["espera_min"] for p in ordenados]
     atendidos = db["historico"]
-    espera_atendidos = [c["espera_min"] for c in atendidos]
+    atendimentos_realizados = [c for c in atendidos if c.get("desfecho") != "nao_compareceu"]
+    espera_atendidos = [c["espera_min"] for c in atendimentos_realizados]
 
     return {
         "total": len(ordenados),
@@ -152,7 +153,7 @@ def _obter_estado():
             "criticos": contagem[1] + contagem[2],
             "atrasados": sum(1 for p in ordenados if p["atrasado"]),
             "espera_media": round(sum(esperas) / len(esperas)) if esperas else 0,
-            "atendidos": len(atendidos),
+            "atendidos": len(atendimentos_realizados),
             "espera_media_atendidos": round(sum(espera_atendidos) / len(espera_atendidos)) if espera_atendidos else 0,
         },
         "consultorios": CONSULTORIOS,
