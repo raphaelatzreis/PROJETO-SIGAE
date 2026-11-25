@@ -77,6 +77,13 @@ class TesteMedico(unittest.TestCase):
         self.assertEqual(self.medico.atendimentos, 0)
         self.assertTrue(self.medico.disponivel)
 
+    def test_impedir_registrar_ausencia_sem_atendimento(self):
+        with self.assertRaises(ValueError):
+            self.medico.registrar_ausencia()
+
+        self.assertTrue(self.medico.disponivel)
+        self.assertEqual(self.medico.atendimentos, 0)
+
     def test_impedir_atendimento_simultaneo(self):
         self.medico.iniciar_atendimento()
 
