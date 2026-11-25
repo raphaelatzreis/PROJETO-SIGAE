@@ -29,6 +29,9 @@ class Medico:
         ):
             raise ValueError("A ordem de cadastro deve ser não negativa.")
 
+        if not isinstance(especialidade, str) or not especialidade.strip():
+            raise ValueError("A especialidade do médico é obrigatória.")
+
         self.id = id
         self.nome = nome.strip()
         self.especialidade = especialidade.strip()

@@ -59,6 +59,20 @@ class TesteMedico(unittest.TestCase):
         self.assertEqual(self.medico.atendimentos, 0)
         self.assertTrue(self.medico.disponivel)
 
+    def test_impedir_especialidade_none(self):
+        with self.assertRaises(ValueError):
+            Medico(2, "Dr. Bruno", especialidade=None)
+
+    def test_impedir_especialidade_nao_textual(self):
+        with self.assertRaises(ValueError):
+            Medico(2, "Dr. Bruno", especialidade=123)
+
+    def test_impedir_especialidade_vazia(self):
+        for especialidade in ("", "   "):
+            with self.subTest(especialidade=especialidade):
+                with self.assertRaises(ValueError):
+                    Medico(2, "Dr. Bruno", especialidade=especialidade)
+
     def test_iniciar_atendimento(self):
         self.medico.iniciar_atendimento()
         self.assertFalse(self.medico.disponivel)
