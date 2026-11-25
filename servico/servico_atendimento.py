@@ -301,9 +301,8 @@ class ServicoAtendimento:
         disponibilidade_anterior = medico.disponivel
         atendimentos_anteriores = medico.atendimentos
 
-        medico.finalizar_atendimento()
-
         try:
+            medico.finalizar_atendimento()
             self.fila_medicos.inserir(medico)
 
         except Exception:

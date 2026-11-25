@@ -691,5 +691,33 @@ class TesteServicoAtendimento(unittest.TestCase):
         self.assertFalse(self.servico.validar_integridade())
 
 
+    def test_rollback_se_metodo_de_finalizacao_falhar_apos_alterar_estado(self):
+        self.servico.cadastrar_medico("Dra. Ana")
+        self.cadastrar_paciente()
+
+        resultado = self.servico.chamar_proximo()
+        medico = resultado["medico"]
+        atendimentos_anteriores = medico.atendimentos
+
+        def finalizar_e_falhar():
+            medico.atendimentos += 1
+            medico.disponivel = True
+            raise RuntimeError("Falha simulada durante a finalizacao")
+
+        with patch.object(
+            medico,
+            "finalizar_atendimento",
+            side_effect=finalizar_e_falhar,
+        ):
+            with self.assertRaises(RuntimeError):
+                self.servico.finalizar_atendimento(medico.id)
+
+        self.assertFalse(medico.disponivel)
+        self.assertEqual(medico.atendimentos, atendimentos_anteriores)
+        self.assertFalse(
+            self.servico.fila_medicos.esta_na_fila(medico.id)
+        )
+        self.assertTrue(self.servico.validar_integridade())
+
 if __name__ == "__main__":
     unittest.main()
