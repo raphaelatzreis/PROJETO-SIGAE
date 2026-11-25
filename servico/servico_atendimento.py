@@ -196,7 +196,7 @@ class ServicoAtendimento:
         especialidade="Clínica Geral",
         atendimentos=0,
     ):
-        """Cadastra um médico e o coloca na fila de disponíveis."""
+        """Cadastra médico com rollback se o registro ou a fila falhar."""
         medico = Medico(
             id=self.proximo_id_medico,
             nome=nome,
@@ -205,9 +205,19 @@ class ServicoAtendimento:
             ordem_cadastro=self.ordem_cadastro_medico,
         )
 
-        self.fila_medicos.inserir(medico)
-        self.medicos[medico.id] = medico
+        try:
+            self.fila_medicos.inserir(medico)
+            self.medicos[medico.id] = medico
 
+        except Exception:
+            # A inserção pode ter alterado a fila antes de lançar a exceção.
+            if self.fila_medicos.esta_na_fila(medico.id):
+                self.fila_medicos.remover(medico.id)
+
+            self.medicos.pop(medico.id, None)
+            raise
+
+        # Os contadores só avançam depois do cadastro completo.
         self.proximo_id_medico += 1
         self.ordem_cadastro_medico += 1
 
@@ -297,8 +307,6 @@ class ServicoAtendimento:
             self.fila_medicos.inserir(medico)
 
         except Exception:
-            # A inserção pode ter ocorrido antes de uma falha ser lançada.
-            # Por isso, verificamos e removemos o médico da fila.
             if self.fila_medicos.esta_na_fila(id_medico):
                 self.fila_medicos.remover(id_medico)
 

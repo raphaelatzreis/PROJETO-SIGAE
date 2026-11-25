@@ -237,6 +237,36 @@ class TesteServicoAtendimento(unittest.TestCase):
         )
         self.assertTrue(self.servico.validar_integridade())
 
+    def test_rollback_se_cadastro_medico_falhar_apos_inserir_na_fila(self):
+        proximo_id_esperado = self.servico.proximo_id_medico
+        ordem_esperada = self.servico.ordem_cadastro_medico
+
+        inserir_original = self.servico.fila_medicos.inserir
+
+        def inserir_e_falhar(medico):
+            inserir_original(medico)
+            raise RuntimeError("Falha simulada após inserir na fila")
+
+        with patch.object(
+            self.servico.fila_medicos,
+            "inserir",
+            side_effect=inserir_e_falhar,
+        ):
+            with self.assertRaises(RuntimeError):
+                self.servico.cadastrar_medico("Dra. Ana")
+
+        self.assertEqual(self.servico.medicos, {})
+        self.assertTrue(self.servico.fila_medicos.esta_vazia())
+        self.assertEqual(
+            self.servico.proximo_id_medico,
+            proximo_id_esperado,
+        )
+        self.assertEqual(
+            self.servico.ordem_cadastro_medico,
+            ordem_esperada,
+        )
+        self.assertTrue(self.servico.validar_integridade())
+
 
 if __name__ == "__main__":
     unittest.main()
