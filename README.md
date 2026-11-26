@@ -93,8 +93,8 @@ Se qualquer etapa de uma operação falha, o serviço desfaz as etapas anteriore
 |---|---|
 | Atendimento | Com o consultório **livre**: cartão do próximo paciente (sinais vitais, espera vs. tempo-alvo) e a lista dos próximos. Com paciente **chamado**: ID do paciente, médico responsável com o ID, prontuário do atendimento (dados da triagem, anamnese, exame físico, hipótese diagnóstica, conduta e desfecho) com salvamento automático, cronômetro, rechamar, encerrar e "encerrar e chamar próximo", com a fila ao lado |
 | Fila | Tabela completa em duas ordens: **por prioridade** (Min-Heap) ou **por chegada** (percurso em ordem da Rubro-Negra). Tem filtro por nível, busca e reclassificação do nível de urgência (clique no selo). A chamada sempre segue a fila de prioridade |
-| Nova triagem | Cadastro com classificação de risco (Protocolo de Manchester) e sinais vitais |
-| Equipe médica | Cadastro de médicos, próximo médico a ser escalado e a ordem do Heap de médicos (atendimentos concluídos e situação) |
+| Nova triagem | Cadastro com classificação de risco (Protocolo de Manchester), sinais vitais e hora de chegada. A caixa **Agora** vem marcada; desmarcando, dá para informar outro horário de hoje, e a Rubro-Negra ordena a lista por chegada por esse horário. A prévia mostra a posição prevista na fila pela mesma regra do Heap (nível e, no empate, chegada) |
+| Equipe médica | Cadastro de médicos com a carga inicial (campo **Concluídos**), próximo médico a ser escalado e a ordem do Heap de médicos (atendimentos concluídos e situação). Com cargas diferentes dá para montar o Teste C direto pela interface |
 | Estruturas | Visualização ao vivo de tudo que está em memória (detalhes abaixo). Não aparece no menu, porque é uma tela técnica e não do operador: acesse por http://127.0.0.1:5000/estruturas |
 | Histórico | Chamadas do turno com o médico responsável e a situação (em atendimento ou desfecho e duração da consulta); rechamada enquanto o atendimento está aberto |
 | Ver paciente | Clique em qualquer paciente para abrir a ficha lateral (posição na fila, sinais vitais, remover) |
