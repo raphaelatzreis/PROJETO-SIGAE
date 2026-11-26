@@ -132,7 +132,7 @@ A voz usa a Web Speech API do navegador. Chrome e Edge já trazem vozes em pt-BR
 | Método | Rota | Descrição |
 |---|---|---|
 | GET | `/api/estado` | Estado completo: fila por prioridade e por chegada, médicos, histórico, estatísticas, resumo das estruturas e último evento |
-| POST | `/api/pacientes` | Cadastra paciente (`nome`, `idade`, `sexo`, `nivel`, `queixa`, `sinais`, `observacoes`) |
+| POST | `/api/pacientes` | Cadastra paciente (`nome`, `idade`, `sexo`, `nivel`, `queixa`, `sinais`, `observacoes`, `chegada`). `chegada` é opcional, no formato `HH:MM` de hoje; vazio usa a hora atual, e horário no futuro é recusado |
 | GET | `/api/pacientes/<id>` | Localiza um paciente na fila pela Tabela Hash |
 | PATCH | `/api/pacientes/<id>` | Reclassifica o nível de urgência (`nivel`) |
 | DELETE | `/api/pacientes/<id>` | Cancela o paciente (remove das três estruturas) |
