@@ -101,7 +101,7 @@ Se qualquer etapa de uma operação falha, o serviço desfaz as etapas anteriore
 
 **Seção Estruturas**
 
-- **Situação da integridade:** resultado de `validar_integridade()` e da validação da Rubro-Negra.
+- **Situação da integridade:** resultado de `validar_integridade()` e da validação da Rubro-Negra. O `validar_integridade()` confere a Tabela Hash, a Rubro-Negra, os dois Min-Heaps (ordem de heap e mapa de posições, via `FilaPrioridade.validar()`) e se o mesmo conjunto de pacientes está nas três estruturas, sem duplicados nem órfãos.
 - **Testes ao vivo:** um botão para cada teste da defesa. O Teste A cadastra IDs que caem no mesmo bucket, localiza os dois e mostra o redimensionamento. O Teste B reclassifica pacientes e mostra quem passa a ocupar a raiz do Heap. O Teste C cadastra médicos com cargas diferentes e mostra qual é designado a cada chamada. O resultado aparece um passo por vez, com um indicador de progresso. Nos heaps, os nós que mudaram de posição aparecem primeiro no lugar antigo, com setas até o novo, e depois deslizam até lá. Para navegar, use os botões Anterior/Próximo, clique no número do passo ou use as setas ← e → do teclado. Cada teste roda num `ServicoAtendimento` separado, criado só para a demonstração, então não altera a fila real.
 - **Atendimentos em andamento:** liga cada paciente ao médico que o atende e explica o critério das duas escolhas. Por exemplo, por que esse paciente foi chamado antes do seguinte e por que esse médico foi escalado.
 - **Tabela Hash:** capacidade, quantidade, ocupação e total de colisões. Mostra os buckets (os com colisão ficam destacados) e tem uma busca por ID, que exibe o cálculo `ID % capacidade` e o bucket consultado.
