@@ -1,8 +1,9 @@
 class FilaPrioridade:
-    def __init__(self, regra_de_atendimento):
+    def __init__(self, regra_de_atendimento, campo_prioridade="prioridade"):
         self.fila = []
         self.posicoes = []
         self.vem_antes = regra_de_atendimento
+        self.campo_prioridade = campo_prioridade
 
     def tamanho(self):
         return len(self.fila)
@@ -23,13 +24,21 @@ class FilaPrioridade:
 
     # ---------- mapa de posicoes (vetor com index pelo id) ----------
 
+    @staticmethod
+    def _id_valido(id_pessoa):
+        return (
+            isinstance(id_pessoa, int)
+            and not isinstance(id_pessoa, bool)
+            and id_pessoa >= 0
+        )
+
     def _guardar_posicao(self, id_pessoa, posicao):
         while len(self.posicoes) <= id_pessoa:
             self.posicoes.append(None)
         self.posicoes[id_pessoa] = posicao
 
     def _buscar_posicao(self, id_pessoa):
-        if id_pessoa < 0 or id_pessoa >= len(self.posicoes):
+        if not self._id_valido(id_pessoa) or id_pessoa >= len(self.posicoes):
             return None
         return self.posicoes[id_pessoa]
 
@@ -98,8 +107,8 @@ class FilaPrioridade:
     # ---------- operacoes da fila ----------
 
     def inserir(self, pessoa):
-        if isinstance(pessoa.id, bool) or not isinstance(pessoa.id, int) or pessoa.id < 0:
-            raise ValueError(f"O id {pessoa.id} precisa ser um inteiro maior ou igual a zero.")
+        if not self._id_valido(pessoa.id):
+            raise ValueError(f"O id {pessoa.id!r} precisa ser um inteiro maior ou igual a zero.")
         if self.esta_na_fila(pessoa.id):
             raise ValueError(f"O id {pessoa.id} já está na fila.")
 
@@ -148,12 +157,13 @@ class FilaPrioridade:
     def alterar_prioridade(self, id_pessoa, nova_prioridade=None):
         posicao_atual = self._buscar_posicao(id_pessoa)
         if posicao_atual is None:
-            raise ValueError(f"O id {id_pessoa} não está na fila.")
+            raise ValueError(f"O id {id_pessoa!r} não está na fila.")
 
         pessoa_reclassificada = self.fila[posicao_atual]
         if nova_prioridade is not None:
-            pessoa_reclassificada.prioridade = nova_prioridade
-        
+            # altera o campo certo: "prioridade" (pacientes) ou "atendimentos" (medicos)
+            setattr(pessoa_reclassificada, self.campo_prioridade, nova_prioridade)
+
         self.subir(posicao_atual)
 
         posicao_depois_de_subir = self._buscar_posicao(id_pessoa)
@@ -164,7 +174,7 @@ class FilaPrioridade:
     def remover(self, id_pessoa):
         posicao_de_quem_sai = self._buscar_posicao(id_pessoa)
         if posicao_de_quem_sai is None:
-            raise ValueError(f"O id {id_pessoa} não está na fila.")
+            raise ValueError(f"O id {id_pessoa!r} não está na fila.")
 
         pessoa_removida = self.fila[posicao_de_quem_sai]
         posicao_da_ultima_pessoa = len(self.fila) - 1
@@ -182,7 +192,7 @@ class FilaPrioridade:
         return pessoa_removida
 
     def listar_ordenado(self):
-        copia_da_fila = FilaPrioridade(self.vem_antes)
+        copia_da_fila = FilaPrioridade(self.vem_antes, self.campo_prioridade)
         copia_da_fila.fila = self.fila[:]
         copia_da_fila.posicoes = self.posicoes[:]
 
