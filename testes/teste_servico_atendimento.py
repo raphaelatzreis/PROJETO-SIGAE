@@ -683,6 +683,21 @@ class TesteServicoAtendimento(unittest.TestCase):
 
         self.assertFalse(self.servico.validar_integridade())
 
+    def test_integridade_detecta_atendimentos_negativos(self):
+        medico = self.servico.cadastrar_medico("Dra. Ana")
+        medico.atendimentos = -1
+        self.assertFalse(self.servico.validar_integridade())
+
+    def test_integridade_detecta_atendimentos_nao_inteiros(self):
+        medico = self.servico.cadastrar_medico("Dra. Ana")
+        medico.atendimentos = "dois"
+        self.assertFalse(self.servico.validar_integridade())
+
+    def test_integridade_detecta_atendimentos_booleanos(self):
+        medico = self.servico.cadastrar_medico("Dra. Ana")
+        medico.atendimentos = True
+        self.assertFalse(self.servico.validar_integridade())
+
     def test_integridade_detecta_medico_disponivel_fora_da_fila(self):
         self.servico.cadastrar_medico("Dra. Ana")
 

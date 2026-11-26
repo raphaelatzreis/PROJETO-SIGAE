@@ -374,6 +374,13 @@ class ServicoAtendimento:
             return False
 
         for id_medico, medico in self.medicos.items():
+            if (
+                isinstance(medico.atendimentos, bool)
+                or not isinstance(medico.atendimentos, int)
+                or medico.atendimentos < 0
+            ):
+                return False
+
             if medico.id != id_medico:
                 return False
 

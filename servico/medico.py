@@ -29,6 +29,9 @@ class Medico:
         ):
             raise ValueError("A ordem de cadastro deve ser não negativa.")
 
+        if not isinstance(especialidade, str) or not especialidade.strip():
+            raise ValueError("A especialidade do médico é obrigatória.")
+
         self.id = id
         self.nome = nome.strip()
         self.especialidade = especialidade.strip()
@@ -47,6 +50,12 @@ class Medico:
             raise ValueError("O médico não possui atendimento em andamento.")
 
         self.atendimentos += 1
+        self.disponivel = True
+
+    def registrar_ausencia(self):
+        if self.disponivel:
+            raise ValueError("O médico não possui atendimento em andamento.")
+
         self.disponivel = True
 
     def to_dict(self):

@@ -19,7 +19,7 @@
     fila: { titulo: 'Fila de espera', sub: 'Todos os pacientes aguardando, por prioridade' },
     triagem: { titulo: 'Nova triagem', sub: 'Registrar paciente e classificar o risco' },
     equipe: { titulo: 'Equipe médica', sub: 'Médicos disponíveis, pelo menor número de atendimentos (Min-Heap)' },
-    estruturas: { titulo: 'Estruturas de dados', sub: 'Tabela Hash, Árvore Rubro-Negra e os dois Min-Heaps em tempo real' },
+    estruturas: { titulo: 'Estruturas de dados', sub: '' },
     historico: { titulo: 'Histórico de chamadas', sub: 'Pacientes já chamados neste turno' }
   };
 
@@ -360,11 +360,17 @@
       svg.appendChild(svgEl('line', { x1: p.x, y1: p.y, x2: f.x, y2: f.y, class: 'est-aresta' }));
     });
     nos.forEach(function (n) {
-      var g = svgEl('g', { class: 'est-no ' + n.classe });
+      var g = svgEl('g', { class: 'est-no ' + n.classe, 'data-chave': n.chave });
       g.appendChild(svgEl('title', {}, n.titulo));
       g.appendChild(svgEl('circle', { cx: n.x, cy: n.y, r: R }));
       g.appendChild(svgEl('text', { x: n.x, y: n.y + 4, 'text-anchor': 'middle', class: 'est-rotulo' }, n.rotulo));
       if (n.extra) g.appendChild(svgEl('text', { x: n.x, y: n.y + R + 13, 'text-anchor': 'middle', class: 'est-extra' }, n.extra));
+      if (n.marca) {
+        // selo acima do nó (ex.: "P2 → P1", "↑ subiu")
+        var largMarca = n.marca.length * 6.2 + 12;
+        g.appendChild(svgEl('rect', { x: n.x - largMarca / 2, y: n.y - R - 20, width: largMarca, height: 16, rx: 8, class: 'est-marca-fundo' }));
+        g.appendChild(svgEl('text', { x: n.x, y: n.y - R - 8.5, 'text-anchor': 'middle', class: 'est-marca' }, n.marca));
+      }
       svg.appendChild(g);
     });
     alvo.appendChild(svg);
@@ -391,28 +397,332 @@
   }
 
   // Heap guardado em vetor: filho esquerdo de i em 2i+1, direito em 2i+2
-  function desenharHeap(alvo, vetor, rotulo, extra, titulo) {
-    var n = vetor.length;
+  // Posição (x, y) do índice i num heap de n elementos desenhado como árvore
+  function posicaoHeap(i, n, dx, dy, topo) {
     var niveis = n ? Math.floor(Math.log2(n)) + 1 : 0;
-    var largura = Math.max(Math.pow(2, Math.max(niveis - 1, 0)) * DX + 16, 200);
+    var largura = Math.max(Math.pow(2, Math.max(niveis - 1, 0)) * dx + 16, 200);
+    var d = Math.floor(Math.log2(i + 1)), slot = i - (Math.pow(2, d) - 1), vagas = Math.pow(2, d);
+    return { x: (slot + 0.5) * largura / vagas, y: topo + R + 8 + d * dy };
+  }
+
+  // opcoes (usado na demonstração): { dx, dy, topo, chave(item), classe(item, i), marca(item, i) }
+  function desenharHeap(alvo, vetor, rotulo, extra, titulo, opcoes) {
+    opcoes = opcoes || {};
+    var dx = opcoes.dx || DX, dy = opcoes.dy || DY, topo = opcoes.topo || 0;
+    var n = vetor.length;
+    // nLayout: tamanho usado na geometria (na demonstração, o maior entre o heap de antes e o de agora)
+    var nLayout = Math.max(n, opcoes.nLayout || 0);
+    var niveis = nLayout ? Math.floor(Math.log2(nLayout)) + 1 : 0;
+    var largura = Math.max(Math.pow(2, Math.max(niveis - 1, 0)) * dx + 16, 200);
+    var chaves = vetor.map(function (item, i) { return opcoes.chave ? opcoes.chave(item) : String(i); });
     var nos = vetor.map(function (item, i) {
-      var d = Math.floor(Math.log2(i + 1)), slot = i - (Math.pow(2, d) - 1), vagas = Math.pow(2, d);
+      var pos = posicaoHeap(i, nLayout, dx, dy, topo);
       return {
-        chave: String(i), x: (slot + 0.5) * largura / vagas, y: R + 8 + d * DY,
-        rotulo: rotulo(item), extra: extra(item), classe: i === 0 ? 'heap-raiz' : 'heap-no', titulo: '[' + i + '] ' + titulo(item)
+        chave: chaves[i], x: pos.x, y: pos.y,
+        rotulo: rotulo(item), extra: extra(item),
+        classe: (i === 0 ? 'heap-raiz' : 'heap-no') + (opcoes.classe ? ' ' + opcoes.classe(item, i) : ''),
+        marca: opcoes.marca ? opcoes.marca(item, i) : '',
+        titulo: '[' + i + '] ' + titulo(item)
       };
     });
-    var arestas = vetor.map(function (_, i) { return i ? [String(Math.floor((i - 1) / 2)), String(i)] : null; })
+    var arestas = vetor.map(function (_, i) { return i ? [chaves[Math.floor((i - 1) / 2)], chaves[i]] : null; })
       .filter(Boolean);
-    desenharArvore(alvo, nos, arestas, largura, niveis * DY + 20);
+    desenharArvore(alvo, nos, arestas, largura, topo + niveis * dy + 20);
+  }
+
+  // Buckets da Tabela Hash: os com colisão ficam destacados; `marcados` são IDs em evidência
+  function htmlBuckets(buckets, indiceAlvo, marcados) {
+    return buckets.map(function (b, i) {
+      var classe = 'bucket' + (b.length > 1 ? ' bucket-hot' : '') + (indiceAlvo === i ? ' bucket-alvo' : '');
+      return '<div class="' + classe + '"><span class="bucket-idx mono">' + num(i) + '</span>' +
+        (b.length ? b.map(function (id) {
+          var achado = marcados.indexOf(id) >= 0 ? ' bucket-achado' : '';
+          return '<span class="bucket-item mono' + achado + '">' + esc(id) + '</span>';
+        }).join('') : '<span class="muted">—</span>') + '</div>';
+    }).join('');
+  }
+
+  // Demonstração dos testes ao vivo: o servidor roda o teste num serviço separado
+  // e a tela mostra um passo por vez, com o indicador de progresso no topo.
+  var demo = null, demoPasso = 0;
+
+  function desenharQuadro(caixa, q, anterior) {
+    if (q.tipo === 'hash') {
+      caixa.className = 'buckets';
+      setHTML(caixa, htmlBuckets(q.buckets, q.alvo === null ? -1 : q.alvo, q.destaque));
+    } else {
+      desenharHeapDemo(caixa, q, anterior && anterior.tipo === q.tipo ? anterior : null);
+    }
+  }
+
+  // Refaz, a partir do vetor anterior, as trocas que o heap fez neste passo.
+  // Só devolve a lista se a simulação chegar exatamente ao vetor atual; senão, null.
+  function derivarTrocas(anterior, q, chave) {
+    var A = anterior.itens.map(chave), B = q.itens.map(chave);
+    var nomes = {};
+    anterior.itens.concat(q.itens).forEach(function (x) { nomes[chave(x)] = x.nome; });
+    var alvo = q.alvo === null || q.alvo === undefined ? null : String(q.alvo);
+    var arr = A.slice(), pos, movel, trocas = [], inicio = null;
+    if (alvo === null && A.join('|') === B.join('|')) return { inicio: null, trocas: [] };
+
+    if (alvo !== null && A.indexOf(alvo) >= 0 && B.indexOf(alvo) >= 0) {        // reclassificação
+      movel = alvo; pos = A.indexOf(alvo);
+    } else if (alvo !== null && A.indexOf(alvo) < 0 && B.indexOf(alvo) >= 0) {  // inserção no fim do vetor
+      movel = alvo; arr.push(alvo); pos = arr.length - 1;
+      inicio = nomes[alvo] + ' entra no fim do vetor, na posição [' + pos + ']';
+    } else if (alvo !== null && A.indexOf(alvo) >= 0 && B.indexOf(alvo) < 0) {  // remoção
+      var vaga = A.indexOf(alvo);
+      movel = arr.pop();
+      if (vaga < arr.length) {
+        arr[vaga] = movel; pos = vaga;
+        inicio = nomes[movel] + ', o último do vetor, ocupa a vaga [' + vaga + ']';
+      } else { pos = -1; }
+    } else {
+      return null;
+    }
+
+    var alvoFinal = movel === undefined ? -1 : B.indexOf(movel);
+    for (var guarda = 0; pos >= 0 && pos !== alvoFinal && guarda < 32; guarda++) {
+      var prox;
+      if (alvoFinal < pos) {
+        prox = Math.floor((pos - 1) / 2);                     // sobe: troca com o pai
+      } else {
+        prox = alvoFinal;                                     // desce: filho no caminho até o destino
+        while (prox > 0 && Math.floor((prox - 1) / 2) !== pos) prox = Math.floor((prox - 1) / 2);
+        if (prox <= pos) break;
+      }
+      trocas.push({ a: nomes[movel], ia: pos, b: nomes[arr[prox]], ib: prox, sobe: alvoFinal < pos });
+      arr[pos] = arr[prox]; arr[prox] = movel; pos = prox;
+    }
+    if (arr.join('|') !== B.join('|')) return null;
+    return { inicio: inicio, trocas: trocas };
+  }
+
+  // Heap da demonstração: árvore limpa (só cores), quadro "O que aconteceu" ao lado
+  // e o vetor embaixo. Os nós que trocaram de lugar animam com setas.
+  function desenharHeapDemo(caixa, q, anterior) {
+    var medico = q.tipo === 'heap_medicos';
+    var chave = function (x) { return String(x.id); };
+    var curto = function (nome) { return nome.replace(/^Dra?\.\s*/, ''); };
+    var rotulo = medico ? function (x) { return '#' + x.id; } : function (x) { return x.id.replace('PAC-', ''); };
+    var extra = medico
+      ? function (x) { return curto(x.nome) + ' · ' + x.concluidos + ' at.'; }
+      : function (x) { return x.nome + ' · P' + x.nivel; };
+
+    var antes = {};
+    if (anterior) anterior.itens.forEach(function (x, i) { antes[chave(x)] = i; });
+    var temAlvo = q.alvo !== null && q.alvo !== undefined;
+    function estado(x, i) {
+      var k = chave(x);
+      if (temAlvo && String(q.alvo) === k) return 'alvo';
+      if (!anterior) return '';
+      if (!(k in antes)) return 'entrou';
+      if (antes[k] !== i) return 'moveu';
+      return '';
+    }
+
+    // Quadro "O que aconteceu"
+    var info;
+    if (anterior) {
+      var todos = anterior.itens.concat(q.itens);
+      var alvoItem = temAlvo ? todos.filter(function (x) { return chave(x) === String(q.alvo); })[0] : null;
+      var deriv = derivarTrocas(anterior, q, chave);
+      var raizAntes = anterior.itens[0], raizAgora = q.itens[0];
+      var mesmaRaiz = raizAntes && raizAgora && chave(raizAntes) === chave(raizAgora);
+      var listaTrocas;
+      if (!deriv) {
+        listaTrocas = '<p class="muted">Posições alteradas destacadas na árvore.</p>';
+      } else {
+        listaTrocas = (deriv.inicio ? '<p class="demo-info-inicio">' + esc(deriv.inicio) + '</p>' : '') +
+          (deriv.trocas.length
+            ? '<ol class="demo-trocas">' + deriv.trocas.map(function (t) {
+                return '<li><span class="troca-seta">' + (t.sobe ? '↑' : '↓') + '</span>' +
+                  '<span>' + esc(t.a) + ' <span class="mono">[' + t.ia + ']</span> ⇄ ' +
+                  esc(t.b) + ' <span class="mono">[' + t.ib + ']</span></span></li>';
+              }).join('') + '</ol>'
+            : '<p class="muted">Nenhuma troca: a ordem do heap já está correta.</p>');
+      }
+      info =
+        (alvoItem ? '<div class="demo-info-bloco"><span class="demo-info-rotulo">Alteração</span>' +
+          '<p><strong>' + esc(alvoItem.nome) + '</strong>: ' + esc(q.mudanca || 'alterado') + '</p></div>' : '') +
+        '<div class="demo-info-bloco"><span class="demo-info-rotulo">Trocas para reorganizar</span>' + listaTrocas + '</div>' +
+        '<div class="demo-info-bloco"><span class="demo-info-rotulo">Raiz</span>' +
+          (raizAgora
+            ? '<p><strong>' + esc(raizAgora.nome) + '</strong> ' +
+              (mesmaRaiz ? '<span class="muted">(não mudou)</span>' : '<span class="demo-info-novo">nova raiz</span>') + '</p>'
+            : '<p class="muted">Heap vazio</p>') +
+        '</div>';
+    } else {
+      info = '<div class="demo-info-bloco"><span class="demo-info-rotulo">Estado inicial</span>' +
+        '<p>' + q.itens.length + ' no heap.</p></div>' +
+        '<div class="demo-info-bloco"><span class="demo-info-rotulo">Raiz</span>' +
+        '<p><strong>' + (q.itens[0] ? esc(q.itens[0].nome) : '—') + '</strong></p></div>';
+    }
+
+    setHTML(caixa,
+      '<div class="demo-legenda">' +
+        '<span><i class="leg leg-raiz"></i>Raiz</span>' +
+        '<span><i class="leg leg-alvo"></i>Alterado</span>' +
+        '<span><i class="leg leg-moveu"></i>Trocou de lugar</span>' +
+        '<span><i class="leg leg-entrou"></i>Entrou</span>' +
+        '<span class="demo-anim-status" aria-live="polite"></span>' +
+        '<button type="button" class="demo-repetir" hidden>↻ Repetir animação</button>' +
+      '</div>' +
+      '<div class="demo-heap-layout">' +
+        '<div class="est-svg demo-heap-svg"></div>' +
+        '<aside class="demo-info">' + info + '</aside>' +
+      '</div>' +
+      '<div class="demo-vetor-titulo">Vetor do heap</div>' +
+      '<div class="demo-vetor">' + (q.itens.length ? q.itens.map(function (x, i) {
+        var e = estado(x, i), k = chave(x);
+        var sub = anterior && k in antes && antes[k] !== i ? 'era [' + antes[k] + ']' : (e === 'entrou' ? 'novo' : '');
+        return '<div class="vet-celula' + (e ? ' vet-' + e : '') + (i === 0 ? ' vet-raiz' : '') + '">' +
+          '<span class="vet-idx mono">[' + i + ']</span>' +
+          '<span class="vet-id mono">' + esc(rotulo(x)) + '</span>' +
+          '<span class="vet-sub">' + esc(sub) + '</span></div>';
+      }).join('') : '<span class="muted">vazio</span>') + '</div>');
+
+    var alvoSvg = caixa.querySelector('.demo-heap-svg');
+    var nLayout = Math.max(q.itens.length, anterior ? anterior.itens.length : 0);
+    desenharHeap(alvoSvg, q.itens, rotulo, extra,
+      function (x) { return x.nome + ' · ' + extra(x); },
+      {
+        dx: 120, dy: 90, topo: 10, chave: chave, nLayout: nLayout,
+        classe: function (x, i) { var e = estado(x, i); return e ? 'heap-' + e : ''; }
+      });
+    // escala fixa (1,4×): heaps pequenos não ficam gigantes nem os grandes minúsculos
+    var svg = alvoSvg.querySelector('svg');
+    if (svg) svg.style.maxWidth = Math.min(svg.viewBox.baseVal.width * 1.4, 720) + 'px';
+    if (!svg || !anterior) return;
+
+    // Nós que trocaram de posição: começam no lugar antigo, com uma seta até o novo
+    var movidos = [];
+    q.itens.forEach(function (x, i) {
+      var k = chave(x);
+      if (!(k in antes) || antes[k] === i) return;
+      movidos.push({
+        chave: k, alvo: estado(x, i) === 'alvo',
+        de: posicaoHeap(antes[k], nLayout, 120, 90, 10),
+        para: posicaoHeap(i, nLayout, 120, 90, 10)
+      });
+    });
+    if (!movidos.length) return;
+    var repetir = caixa.querySelector('.demo-repetir');
+    repetir.hidden = false;
+    repetir.onclick = function () { animarHeap(svg, movidos, caixa.querySelector('.demo-anim-status')); };
+    animarHeap(svg, movidos, caixa.querySelector('.demo-anim-status'));
+  }
+
+  var PAUSA_ANIMACAO = 1600, DURACAO_ANIMACAO = 900;
+
+  function animarHeap(svg, movidos, status) {
+    svg.style.overflow = 'visible';
+    var antigas = svg.querySelector('.anim-setas');
+    if (antigas) antigas.remove();
+
+    if (!svg.querySelector('#seta-moveu')) {
+      var defs = svgEl('defs');
+      [['seta-moveu', 'anim-ponta-moveu'], ['seta-alvo', 'anim-ponta-alvo']].forEach(function (m) {
+        var marker = svgEl('marker', { id: m[0], viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' });
+        marker.appendChild(svgEl('path', { d: 'M0,0 L10,5 L0,10 z', class: m[1] }));
+        defs.appendChild(marker);
+      });
+      svg.insertBefore(defs, svg.firstChild);
+    }
+
+    // setas curvas do lugar antigo até o novo (desenhadas antes dos nós, por baixo deles)
+    var grupo = svgEl('g', { class: 'anim-setas' });
+    movidos.forEach(function (m) {
+      var vx = m.para.x - m.de.x, vy = m.para.y - m.de.y, dist = Math.sqrt(vx * vx + vy * vy) || 1;
+      var ux = vx / dist, uy = vy / dist;
+      var x1 = m.de.x + ux * (R + 4), y1 = m.de.y + uy * (R + 4);
+      var x2 = m.para.x - ux * (R + 6), y2 = m.para.y - uy * (R + 6);
+      // curvatura sempre para o mesmo lado do sentido: numa troca, ida e volta formam duas curvas separadas
+      var curva = Math.max(28, Math.min(48, dist / 3));
+      var cx = (x1 + x2) / 2 - uy * curva, cy = (y1 + y2) / 2 + ux * curva;
+      grupo.appendChild(svgEl('path', {
+        d: 'M' + x1 + ',' + y1 + ' Q' + cx + ',' + cy + ' ' + x2 + ',' + y2,
+        class: 'anim-seta' + (m.alvo ? ' anim-seta-alvo' : ''),
+        'marker-end': 'url(#' + (m.alvo ? 'seta-alvo' : 'seta-moveu') + ')'
+      }));
+      // marca pontilhada do lugar de destino
+      grupo.appendChild(svgEl('circle', { cx: m.para.x, cy: m.para.y, r: R, class: 'anim-destino' }));
+    });
+    var primeiroNo = svg.querySelector('.est-no');
+    svg.insertBefore(grupo, primeiroNo);
+
+    // 1) intervalo: nós no lugar antigo, arestas apagadas, setas visíveis
+    var arestas = svg.querySelectorAll('.est-aresta');
+    arestas.forEach(function (a) { a.style.transition = 'none'; a.style.opacity = '0.15'; });
+    movidos.forEach(function (m) {
+      var g = svg.querySelector('[data-chave="' + m.chave + '"]');
+      g.style.transition = 'none';
+      g.style.transform = 'translate(' + (m.de.x - m.para.x) + 'px,' + (m.de.y - m.para.y) + 'px)';
+    });
+    if (status) status.textContent = 'Reorganizando o heap…';
+    svg.getBoundingClientRect();  // aplica a posição inicial antes de animar
+
+    // 2) depois da pausa, os nós deslizam até o lugar novo
+    clearTimeout(svg._animTimer);
+    svg._animTimer = setTimeout(function () {
+      movidos.forEach(function (m) {
+        var g = svg.querySelector('[data-chave="' + m.chave + '"]');
+        g.style.transition = 'transform ' + DURACAO_ANIMACAO + 'ms cubic-bezier(.4, 0, .2, 1)';
+        g.style.transform = 'translate(0px, 0px)';
+      });
+      svg._animTimer = setTimeout(function () {
+        arestas.forEach(function (a) { a.style.transition = 'opacity .4s'; a.style.opacity = '1'; });
+        grupo.style.transition = 'opacity .6s';
+        grupo.style.opacity = '0';
+        if (status) status.textContent = '✓ Heap reorganizado';
+      }, DURACAO_ANIMACAO);
+    }, PAUSA_ANIMACAO);
+  }
+
+  function renderDemonstracao() {
+    var alvo = $('demo-resultado');
+    var total = demo.passos.length, p = demo.passos[demoPasso];
+    var ultimo = demoPasso === total - 1;
+    setHTML(alvo,
+      '<div class="demo-topo"><strong>' + esc(demo.titulo) + '</strong>' +
+        (ultimo ? (demo.integra ? '<span class="est-ok">✓ Integridade OK</span>' : '<span class="est-erro">✗ Inconsistência</span>') : '') +
+      '</div>' +
+      '<ol class="demo-stepper" aria-label="Passos">' + demo.passos.map(function (_, i) {
+        var estado = i < demoPasso ? ' feito' : (i === demoPasso ? ' atual' : '');
+        return '<li class="demo-step' + estado + '"><button type="button" data-passo="' + i + '"' +
+          (i === demoPasso ? ' aria-current="step"' : '') + ' aria-label="Passo ' + (i + 1) + '">' + (i + 1) + '</button></li>';
+      }).join('') + '</ol>' +
+      '<div class="demo-atual">' +
+        '<span class="demo-contador mono">Passo ' + (demoPasso + 1) + ' de ' + total + '</span>' +
+        '<p class="demo-texto">' + esc(p.texto) + '</p>' +
+        (p.detalhe ? '<p class="muted">' + esc(p.detalhe) + '</p>' : '') +
+        (p.quadro ? '<div class="demo-quadro"><span class="demo-quadro-titulo">' + esc(p.quadro.titulo) + '</span>' +
+          '<div id="demo-quadro"></div></div>' : '') +
+      '</div>' +
+      '<div class="demo-nav">' +
+        '<button type="button" class="btn btn-ghost" data-mover="-1"' + (demoPasso === 0 ? ' disabled' : '') + '>← Anterior</button>' +
+        (ultimo
+          ? '<span class="demo-fim"><span class="muted">Teste concluído</span>' +
+            '<button type="button" class="btn btn-primary" data-passo="0">↺ Recomeçar</button></span>'
+          : '<button type="button" class="btn btn-primary" data-mover="1">Próximo →</button>') +
+      '</div>');
+    var anterior = demoPasso > 0 ? demo.passos[demoPasso - 1].quadro : null;
+    if (p.quadro) desenharQuadro($('demo-quadro'), p.quadro, anterior);
+    alvo.hidden = false;
+  }
+
+  function irParaPasso(i) {
+    if (!demo) return;
+    demoPasso = Math.max(0, Math.min(demo.passos.length - 1, i));
+    renderDemonstracao();
   }
 
   function renderEstruturas() {
     var e = state.estruturas, h = e.hash;
 
     setHTML($('est-status'), e.integra
-      ? '<span class="est-ok">✓ Integridade OK</span> Hash, Rubro-Negra, Heap de pacientes e Heap de médicos com os mesmos pacientes ativos.'
-      : '<span class="est-erro">✗ Inconsistência</span> As estruturas divergem. Verifique o servidor.');
+      ? '<span class="est-ok">✓ Integridade OK</span>'
+      : '<span class="est-erro">✗ Inconsistência entre as estruturas</span>');
 
     var abertos = state.atendimentos || [];
     setHTML($('vinculos'), abertos.length ? abertos.map(function (a) {
@@ -434,18 +744,12 @@
           (c ? '<p class="vinculo-criterio">' + esc(c.medico.texto) + '</p>' : '') +
         '</div>' +
       '</div>';
-    }).join('') : '<p class="muted est-vazio">Nenhum atendimento em andamento. Chame o próximo paciente na tela de Atendimento.</p>');
+    }).join('') : '<p class="muted est-vazio">Nenhum atendimento em andamento.</p>');
 
-    $('hash-resumo').textContent = 'Encadeamento separado · h(ID) = ID % ' + num(h.capacidade) + ' · ' + num(h.total) +
-      ' paciente(s) · ' + num(h.colisoes) + ' colisão(ões) · ocupação ' + num(h.ocupacao) + '% (dobra de tamanho acima de 75%)';
-    setHTML($('hash-buckets'), h.buckets.map(function (b, i) {
-      var classe = 'bucket' + (b.length > 1 ? ' bucket-hot' : '') + (hashAlvo && hashAlvo.indice === i ? ' bucket-alvo' : '');
-      return '<div class="' + classe + '"><span class="bucket-idx mono">' + num(i) + '</span>' +
-        (b.length ? b.map(function (id) {
-          var achado = hashAlvo && hashAlvo.id === id ? ' bucket-achado' : '';
-          return '<span class="bucket-item mono' + achado + '">' + esc(id) + '</span>';
-        }).join('') : '<span class="muted">—</span>') + '</div>';
-    }).join(''));
+    $('hash-resumo').textContent = 'Capacidade ' + num(h.capacidade) + ' · ' + num(h.total) +
+      ' paciente(s) · ' + num(h.colisoes) + ' colisão(ões) · ocupação ' + num(h.ocupacao) + '%';
+    setHTML($('hash-buckets'), htmlBuckets(h.buckets,
+      hashAlvo ? hashAlvo.indice : -1, hashAlvo ? [hashAlvo.id] : []));
 
     $('rb-resumo').textContent = num(h.total) + ' nó(s) · altura ' + num(e.arvore_altura) + ' · ' +
       (e.arvore_valida ? 'propriedades rubro-negras válidas' : 'propriedades violadas!');
@@ -462,8 +766,8 @@
 
     var hm = e.heap_medicos;
     $('heap-med-resumo').textContent = hm.length
-      ? 'Raiz: ' + hm[0].nome + ' (' + hm[0].concluidos + ' concluído(s)) · só médicos disponíveis ficam no heap'
-      : 'Nenhum médico disponível: as chamadas ficam bloqueadas.';
+      ? 'Raiz: ' + hm[0].nome + ' (' + hm[0].concluidos + ' concluído(s))'
+      : 'Nenhum médico disponível.';
     desenharHeap($('heap-med-svg'), hm,
       function (m) { return '#' + m.id; },
       function (m) { return m.concluidos + ' at.'; },
@@ -494,6 +798,7 @@
   function irPara() {
     var rota = (location.hash.replace(/^#\/?/, '') || 'atendimento');
     if (!ROTAS[rota]) rota = 'atendimento';
+    if (rota === 'estruturas') $('nav-estruturas').hidden = false;
     document.querySelectorAll('.view').forEach(function (v) {
       v.hidden = v.getAttribute('data-view') !== rota;
     });
@@ -502,10 +807,41 @@
     });
     el.title.textContent = ROTAS[rota].titulo;
     el.subtitle.textContent = ROTAS[rota].sub;
+    el.subtitle.hidden = !ROTAS[rota].sub;
     document.title = ROTAS[rota].titulo + ' — SIGAE';
     if (rota === 'triagem') setTimeout(function () { el.form.elements.nome.focus(); }, 50);
   }
   window.addEventListener('hashchange', irPara);
+
+  // Item "Estruturas" do menu fica escondido: três cliques seguidos na logo
+  // mostram o item (e abrem a seção); outros três cliques escondem de novo.
+  var cliquesLogo = 0, ultimoCliqueLogo = 0;
+  document.querySelector('.brand').addEventListener('click', function () {
+    var agora = Date.now();
+    cliquesLogo = agora - ultimoCliqueLogo < 600 ? cliquesLogo + 1 : 1;
+    ultimoCliqueLogo = agora;
+    if (cliquesLogo < 3) return;
+    cliquesLogo = 0;
+    var item = $('nav-estruturas');
+    item.hidden = !item.hidden;
+    if (!item.hidden) location.hash = '#/estruturas';
+    else if (location.hash === '#/estruturas') location.hash = '#/atendimento';
+  });
+
+  $('demo-botoes').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-teste]');
+    if (!b) return;
+    this.querySelectorAll('[data-teste]').forEach(function (x) { x.classList.toggle('active', x === b); });
+    api('GET', '/api/demonstracao/' + b.getAttribute('data-teste'))
+      .then(function (d) { demo = d; irParaPasso(0); })
+      .catch(function (err) { toast(err.message, 'error'); });
+  });
+
+  $('demo-resultado').addEventListener('click', function (e) {
+    var passo = e.target.closest('[data-passo]'), mover = e.target.closest('[data-mover]');
+    if (passo) irParaPasso(Number(passo.getAttribute('data-passo')));
+    else if (mover) irParaPasso(demoPasso + Number(mover.getAttribute('data-mover')));
+  });
 
   $('ordem-group').addEventListener('click', function (e) {
     var b = e.target.closest('[data-ordem]');
@@ -1066,7 +1402,11 @@
     }
     var tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); chamar(); }
+    if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && demo && location.hash === '#/estruturas') {
+      e.preventDefault();
+      irParaPasso(demoPasso + (e.key === 'ArrowRight' ? 1 : -1));
+    }
+    else if (e.key === 'n' || e.key === 'N') { e.preventDefault(); chamar(); }
     else if ((e.key === 'r' || e.key === 'R') && state.ultimo_chamado) { e.preventDefault(); rechamar(); }
   });
 
