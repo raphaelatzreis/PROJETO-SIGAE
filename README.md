@@ -140,7 +140,7 @@ A voz usa a Web Speech API do navegador. Chrome e Edge já trazem vozes em pt-BR
 | POST | `/api/rechamar` | Repete o aviso da última chamada, ou de uma específica com `seq` |
 | PATCH | `/api/atendimentos/<seq>` | Salva o prontuário do atendimento em andamento (`prontuario`) |
 | POST | `/api/atendimentos/<seq>/encerrar` | Encerra o atendimento e devolve o médico ao Heap; exige `prontuario.desfecho` (`alta`, `observacao`, `encaminhamento`, `internacao`, `nao_compareceu`) |
-| POST | `/api/medicos` | Cadastra médico (`nome`) |
+| POST | `/api/medicos` | Cadastra médico (`nome`, `atendimentos`). `atendimentos` é a carga inicial de atendimentos concluídos, de 0 a 9999 (padrão 0), usada pelo Heap de médicos |
 | GET | `/api/estruturas/hash/<id>` | Mostra como a Hash localiza o ID: índice calculado, conteúdo do bucket e situação do paciente |
 | GET | `/api/demonstracao/<teste>` | Roda o teste ao vivo `a` (colisão), `b` (prioridade) ou `c` (balanceamento dos médicos) num serviço separado e devolve o passo a passo |
 | POST | `/api/resetar` | Restaura os dados de teste |
