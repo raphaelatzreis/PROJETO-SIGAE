@@ -1,0 +1,7 @@
+# Padroniza o fim de linha: LF no repositório, conversão automática no checkout.
+* text=auto
+
+# Arquivos binários não são convertidos.
+*.png binary
+*.jpg binary
+*.ico binary
