@@ -1299,6 +1299,17 @@
     return lista;
   }
 
+  // Hora de chegada que será usada no cadastro: a digitada (hoje) ou "agora".
+  function horaChegadaPrevista() {
+    var f = el.form.elements;
+    var agora = new Date();
+    if (!f.chegada || !f.chegada_agora || f.chegada_agora.checked || !f.chegada.value) return agora;
+    var partes = f.chegada.value.split(':');
+    var d = new Date(agora);
+    d.setHours(Number(partes[0]), Number(partes[1]), 0, 0);
+    return d;
+  }
+
   function renderPreview() {
     var box = $('triage-preview');
     if (!box) return;
@@ -1318,7 +1329,13 @@
 
     var nivelHtml;
     if (n) {
-      var frente = state.pacientes.filter(function (p) { return p.nivel <= n.codigo; }).length;
+      // Mesma regra do Min-Heap: nível menor na frente; no mesmo nível, quem chegou antes
+      // (empate de horário: o ID já existente é menor que o do novo paciente, então fica na frente).
+      var chegadaNova = horaChegadaPrevista();
+      var frente = state.pacientes.filter(function (p) {
+        if (p.nivel !== n.codigo) return p.nivel < n.codigo;
+        return new Date(p.chegada_iso) <= chegadaNova;
+      }).length;
       nivelHtml =
         '<div class="pv-level"><span class="lc-num">' + n.codigo + '</span><div><strong>' + esc(n.nome) + '</strong>' +
           '<small>Tempo-alvo: ' + esc(n.alvo) + '</small></div></div>' +
