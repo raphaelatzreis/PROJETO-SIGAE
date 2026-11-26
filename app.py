@@ -167,6 +167,7 @@ def _arvore_para_dict(arvore, no):
 
 
 def _altura(no):
+    """Altura da árvore já convertida em dict (0 para árvore vazia)."""
     return 0 if no is None else 1 + max(_altura(no["esq"]), _altura(no["dir"]))
 
 
@@ -241,6 +242,7 @@ def _registrar_evento(tipo, chamada):
 
 
 def _erro(msg, status=400):
+    """Resposta de erro padrão da API: {"erro": msg} com o status HTTP (400 por padrão)."""
     return jsonify({"erro": msg}), status
 
 
