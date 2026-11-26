@@ -327,6 +327,15 @@ class ServicoAtendimento:
         if not self.arvore.validar():
             return False
 
+        # Propriedade de Min-Heap e mapa de posições dos dois heaps.
+        fila_pacientes_ok, _ = self.fila_pacientes.validar()
+        if not fila_pacientes_ok:
+            return False
+
+        fila_medicos_ok, _ = self.fila_medicos.validar()
+        if not fila_medicos_ok:
+            return False
+
         pacientes_hash = {
             paciente.id: paciente
             for paciente in self.tabela_hash.listar_pacientes()

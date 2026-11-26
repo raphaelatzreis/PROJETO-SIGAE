@@ -880,10 +880,13 @@
   $('medico-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var nome = $('medico-nome').value.trim();
-    api('POST', '/api/medicos', { nome: nome })
+    var campoCarga = $('medico-atendimentos');
+    var atendimentos = campoCarga ? campoCarga.value.trim() : '';
+    api('POST', '/api/medicos', { nome: nome, atendimentos: atendimentos === '' ? 0 : Number(atendimentos) })
       .then(function (novo) {
         state = novo; renderTudo();
         $('medico-nome').value = '';
+        if (campoCarga) campoCarga.value = '';
         toast('Médico ' + nome + ' cadastrado.', 'success');
       })
       .catch(function (err) { toast(err.message, 'error'); });
@@ -1296,6 +1299,17 @@
     return lista;
   }
 
+  // Hora de chegada que será usada no cadastro: a digitada (hoje) ou "agora".
+  function horaChegadaPrevista() {
+    var f = el.form.elements;
+    var agora = new Date();
+    if (!f.chegada || !f.chegada_agora || f.chegada_agora.checked || !f.chegada.value) return agora;
+    var partes = f.chegada.value.split(':');
+    var d = new Date(agora);
+    d.setHours(Number(partes[0]), Number(partes[1]), 0, 0);
+    return d;
+  }
+
   function renderPreview() {
     var box = $('triage-preview');
     if (!box) return;
@@ -1315,7 +1329,13 @@
 
     var nivelHtml;
     if (n) {
-      var frente = state.pacientes.filter(function (p) { return p.nivel <= n.codigo; }).length;
+      // Mesma regra do Min-Heap: nível menor na frente; no mesmo nível, quem chegou antes
+      // (empate de horário: o ID já existente é menor que o do novo paciente, então fica na frente).
+      var chegadaNova = horaChegadaPrevista();
+      var frente = state.pacientes.filter(function (p) {
+        if (p.nivel !== n.codigo) return p.nivel < n.codigo;
+        return new Date(p.chegada_iso) <= chegadaNova;
+      }).length;
       nivelHtml =
         '<div class="pv-level"><span class="lc-num">' + n.codigo + '</span><div><strong>' + esc(n.nome) + '</strong>' +
           '<small>Tempo-alvo: ' + esc(n.alvo) + '</small></div></div>' +
@@ -1368,8 +1388,15 @@
       if (invalido && invalido.focus) invalido.focus();
       return;
     }
+    var horaManual = temCampoChegada() && !f.chegada_agora.checked;
+    if (horaManual && !f.chegada.value) {
+      el.formErro.textContent = 'Informe a hora de chegada ou marque "Agora".';
+      f.chegada.focus();
+      return;
+    }
     var corpo = {
       nome: f.nome.value, idade: f.idade.value, sexo: f.sexo.value, nivel: f.nivel.value,
+      chegada: horaManual ? f.chegada.value : '',
       queixa: f.queixa.value, observacoes: f.observacoes.value,
       sinais: { pa: f.pa.value, fc: f.fc.value, temp: f.temp.value, spo2: f.spo2.value }
     };
@@ -1389,8 +1416,33 @@
   });
   el.form.addEventListener('reset', function () {
     el.formErro.textContent = '';
-    setTimeout(renderPreview, 0);
+    setTimeout(function () { sincronizarChegada(); renderPreview(); }, 0);
   });
+
+  // Hora de chegada: com "Agora" marcado o campo fica bloqueado e o servidor usa a hora atual.
+  // Se a página vier sem esses campos (HTML antigo em cache), nada aqui pode impedir o resto de iniciar.
+  function temCampoChegada() {
+    var f = el.form.elements;
+    return !!(f.chegada && f.chegada_agora);
+  }
+  function sincronizarChegada() {
+    if (!temCampoChegada()) return;
+    var f = el.form.elements;
+    f.chegada.disabled = f.chegada_agora.checked;
+    f.chegada.required = !f.chegada_agora.checked;
+    if (f.chegada_agora.checked) f.chegada.value = '';
+  }
+  if (temCampoChegada()) {
+    el.form.elements.chegada_agora.addEventListener('change', function () {
+      var f = el.form.elements;
+      sincronizarChegada();
+      if (!f.chegada_agora.checked) {
+        var d = new Date();
+        f.chegada.value = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        f.chegada.focus();
+      }
+    });
+  }
 
   // Atalhos de teclado
   document.addEventListener('keydown', function (e) {

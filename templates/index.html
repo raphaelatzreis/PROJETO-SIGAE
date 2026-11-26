@@ -178,6 +178,13 @@
                     <label><input type="radio" name="sexo" value="M"><span>Masculino</span></label>
                   </div>
                 </div>
+                <div class="field span-2">
+                  <span>Hora de chegada</span>
+                  <div class="chegada-campo">
+                    <input name="chegada" type="time" disabled aria-label="Hora de chegada">
+                    <label class="chegada-agora"><input type="checkbox" name="chegada_agora" checked>Agora</label>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -246,8 +253,9 @@
         <!-- ===== Equipe médica ===== -->
         <section class="view" data-view="equipe" hidden>
           <div class="toolbar">
-            <form id="medico-form" class="search" autocomplete="off" style="max-width:520px;display:flex;gap:8px">
+            <form id="medico-form" class="search" autocomplete="off" style="max-width:680px;display:flex;gap:8px">
               <input type="text" name="nome" id="medico-nome" placeholder="Nome do médico clínico" maxlength="120" required minlength="3">
+              <input type="number" name="atendimentos" id="medico-atendimentos" min="0" max="9999" step="1" placeholder="Concluídos (0)" title="Atendimentos já concluídos (carga inicial)" aria-label="Atendimentos já concluídos" style="max-width:150px">
               <button type="submit" class="btn btn-primary">Cadastrar médico</button>
             </form>
             <p class="muted" id="medico-proximo"></p>
