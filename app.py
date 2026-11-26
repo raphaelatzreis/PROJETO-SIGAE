@@ -321,6 +321,21 @@ def api_criar_paciente():
     if sexo not in ("M", "F"):
         return _erro("Sexo deve ser M ou F.")
 
+    agora = datetime.now()
+    chegada_txt = str(dados.get("chegada") or "").strip()
+    if chegada_txt:
+        # Hora informada na triagem (HH:MM de hoje): a árvore rubro-negra ordena por ela,
+        # então um paciente cadastrado depois pode aparecer antes na lista por chegada.
+        try:
+            hora = datetime.strptime(chegada_txt, "%H:%M")
+        except ValueError:
+            return _erro("Hora de chegada inválida. Use o formato HH:MM.")
+        chegada = agora.replace(hour=hora.hour, minute=hora.minute, second=0, microsecond=0)
+        if chegada > agora:
+            return _erro("A hora de chegada não pode estar no futuro.")
+    else:
+        chegada = agora  # opção "Agora"
+
     sinais_in = dados.get("sinais")
     if not isinstance(sinais_in, dict):
         sinais_in = {}
@@ -339,7 +354,7 @@ def api_criar_paciente():
         senha = _gerar_senha(nome, f"PAC-{servico.proximo_id_paciente}")
         try:
             paciente = servico.cadastrar_paciente(
-                nome, idade, sexo, nivel, queixa, datetime.now(), sinais=sinais,
+                nome, idade, sexo, nivel, queixa, chegada, sinais=sinais,
                 observacoes=str(dados.get("observacoes", "")).strip()[:2000], senha=senha,
             )
         except ValueError as exc:
@@ -601,12 +616,25 @@ def api_buscar_hash(pid):
 
 @app.route("/api/medicos", methods=["POST"])
 def api_cadastrar_medico():
-    nome = str(_json_body().get("nome", "")).strip()[:120]
+    dados = _json_body()
+    nome = str(dados.get("nome", "")).strip()[:120]
     if len(nome) < 3:
         return _erro("Informe o nome completo do médico.")
+    # Carga inicial: atendimentos já concluídos (usada pelo Min-Heap de médicos).
+    concluidos = dados.get("atendimentos", 0)
+    if concluidos in (None, ""):
+        concluidos = 0
+    try:
+        if isinstance(concluidos, bool) or float(concluidos) != int(float(concluidos)):
+            raise ValueError
+        concluidos = int(float(concluidos))
+    except (TypeError, ValueError):
+        return _erro("Atendimentos concluídos deve ser um número inteiro.")
+    if not 0 <= concluidos <= 9999:
+        return _erro("Atendimentos concluídos deve estar entre 0 e 9999.")
     with _lock:
         try:
-            db["servico"].cadastrar_medico(nome)
+            db["servico"].cadastrar_medico(nome, atendimentos=concluidos)
         except ValueError as exc:
             return _erro(str(exc))
         return jsonify(_obter_estado()), 201

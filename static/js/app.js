@@ -880,10 +880,12 @@
   $('medico-form').addEventListener('submit', function (e) {
     e.preventDefault();
     var nome = $('medico-nome').value.trim();
-    api('POST', '/api/medicos', { nome: nome })
+    var atendimentos = $('medico-atendimentos').value.trim();
+    api('POST', '/api/medicos', { nome: nome, atendimentos: atendimentos === '' ? 0 : Number(atendimentos) })
       .then(function (novo) {
         state = novo; renderTudo();
         $('medico-nome').value = '';
+        $('medico-atendimentos').value = '';
         toast('Médico ' + nome + ' cadastrado.', 'success');
       })
       .catch(function (err) { toast(err.message, 'error'); });
@@ -1368,8 +1370,14 @@
       if (invalido && invalido.focus) invalido.focus();
       return;
     }
+    if (!f.chegada_agora.checked && !f.chegada.value) {
+      el.formErro.textContent = 'Informe a hora de chegada ou marque "Agora".';
+      f.chegada.focus();
+      return;
+    }
     var corpo = {
       nome: f.nome.value, idade: f.idade.value, sexo: f.sexo.value, nivel: f.nivel.value,
+      chegada: f.chegada_agora.checked ? '' : f.chegada.value,
       queixa: f.queixa.value, observacoes: f.observacoes.value,
       sinais: { pa: f.pa.value, fc: f.fc.value, temp: f.temp.value, spo2: f.spo2.value }
     };
@@ -1389,7 +1397,24 @@
   });
   el.form.addEventListener('reset', function () {
     el.formErro.textContent = '';
-    setTimeout(renderPreview, 0);
+    setTimeout(function () { sincronizarChegada(); renderPreview(); }, 0);
+  });
+
+  // Hora de chegada: com "Agora" marcado o campo fica bloqueado e o servidor usa a hora atual.
+  function sincronizarChegada() {
+    var f = el.form.elements;
+    f.chegada.disabled = f.chegada_agora.checked;
+    f.chegada.required = !f.chegada_agora.checked;
+    if (f.chegada_agora.checked) f.chegada.value = '';
+  }
+  el.form.elements.chegada_agora.addEventListener('change', function () {
+    var f = el.form.elements;
+    sincronizarChegada();
+    if (!f.chegada_agora.checked) {
+      var d = new Date();
+      f.chegada.value = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      f.chegada.focus();
+    }
   });
 
   // Atalhos de teclado
